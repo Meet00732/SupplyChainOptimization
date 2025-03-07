@@ -1,4 +1,4 @@
-name: Cloud Composer Deployment
+name: Deploy to Compute Engine & Cloud Composer
 
 on:
   push:
@@ -6,21 +6,22 @@ on:
   workflow_dispatch:
     inputs:
       deployment_target:
-        description: 'Where to deploy the DAGs'
+        description: 'Where to deploy Airflow'
         required: true
-        default: 'local'
+        default: 'compute_engine'
         type: choice
         options:
           - local
           - cloud_composer
+          - compute_engine
           - both
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -32,173 +33,113 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r Data_Pipeline/requirements-test.txt
-
       - name: Set PYTHONPATH
         run: |
           echo "PYTHONPATH=$(pwd)/Data_Pipeline:$(pwd)" >> $GITHUB_ENV
           echo "PYTHONPATH set to $(pwd)/Data_Pipeline:$(pwd)"
-
       - name: Run Unit Tests
         run: |
           python -m unittest discover -s Data_Pipeline/tests -p "test*.py"
 
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
-      - name: Create secret directory
-        run: mkdir -p secret
+      - name: Set Up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
 
-      - name: Set up GCP credentials
+      # 🚀 Create Compute Engine Instance If It Does Not Exist
+      - name: Check and Create Compute Engine Instance
+        if: ${{ github.event.inputs.deployment_target == 'compute_engine' || github.event.inputs.deployment_target == 'both' }}
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_ZONE: "us-central1-a"
+          INSTANCE_NAME: "airflow-server"
+          MACHINE_TYPE: "e2-standard-2"
+          IMAGE_FAMILY: "debian-11"
+          IMAGE_PROJECT: "debian-cloud"
         run: |
-          echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > secret/gcp-key.json
-          chmod 600 secret/gcp-key.json
-          # Verify the file exists and has content
-          ls -la secret/
-          if [ -s secret/gcp-key.json ]; then
-            echo "GCP Key has content"
-            # Verify it's valid JSON
-            if jq . secret/gcp-key.json > /dev/null 2>&1; then
-              echo "GCP Key appears to be valid JSON"
-            else
-              echo "GCP Key is not valid JSON"
-              exit 1
-            fi
+          INSTANCE_EXISTS=$(gcloud compute instances list --filter="name=($INSTANCE_NAME)" --format="value(name)")
+          
+          if [ -z "$INSTANCE_EXISTS" ]; then
+            echo "🚀 Creating new Compute Engine instance..."
+            gcloud compute instances create $INSTANCE_NAME \
+              --project=$GCP_PROJECT_ID \
+              --zone=$GCP_ZONE \
+              --machine-type=$MACHINE_TYPE \
+              --image-family=$IMAGE_FAMILY \
+              --image-project=$IMAGE_PROJECT \
+              --boot-disk-size=50GB \
+              --tags=http-server,https-server
           else
-            echo "GCP Key is empty"
-            exit 1
+            echo "✅ Compute Engine instance already exists."
           fi
-          export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/secret/gcp-key.json"
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/secret/gcp-key.json" >> $GITHUB_ENV
 
-      # Local Docker Compose deployment (if needed)
-      - name: Local Deployment with Docker Compose
-        if: ${{ github.event.inputs.deployment_target == 'local' || github.event.inputs.deployment_target == 'both' || github.event.inputs.deployment_target == '' }}
+      # 🚀 Get Compute Engine External IP
+      - name: Get Compute Engine External IP
+        id: get-ip
         run: |
-          # Create .env file
-          cat > .env << 'EOL'
-          # PostgreSQL Configuration
-          POSTGRES_USER=airflow
-          POSTGRES_PASSWORD=airflow
-          POSTGRES_DB=airflow
+          EXTERNAL_IP=$(gcloud compute instances describe airflow-server \
+            --zone us-central1-a --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
+          echo "COMPUTE_ENGINE_IP=$EXTERNAL_IP" >> $GITHUB_ENV
+          echo "🌍 Compute Engine IP: $EXTERNAL_IP"
 
-          # Airflow Configuration
-          AIRFLOW_DATABASE_PASSWORD=airflow
-          AIRFLOW_FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
-          REDIS_PASSWORD=redispass
-
-          # Airflow Admin User
-          AIRFLOW_ADMIN_USERNAME=admin
-          AIRFLOW_ADMIN_PASSWORD=admin
-          AIRFLOW_ADMIN_FIRSTNAME=Admin
-          AIRFLOW_ADMIN_LASTNAME=User
-          AIRFLOW_ADMIN_EMAIL=admin@example.com
-
-          # Airflow UID
-          AIRFLOW_UID=50000
-
-          # Docker Group ID
-          DOCKER_GID=0
-
-          # Airflow Image
-          AIRFLOW_IMAGE_NAME=apache/airflow:2.7.3-python3.10
-          
-          # GCP Configuration
-          GOOGLE_APPLICATION_CREDENTIALS=/app/secret/gcp-key.json
-          EOL
-          
-          # Set up Docker
-          docker compose down
-          
-          # Create necessary directories
-          mkdir -p logs
-          mkdir -p dags
-          mkdir -p plugins
-          chmod -R 777 logs dags plugins
-          
-          # Modify airflow-init command
-          sed '/airflow-init:/,/depends_on:/s/command: >/command: >-/' docker-compose.yaml > docker-compose.temp.yaml
-          mv docker-compose.temp.yaml docker-compose.yaml
-          
-          # Deploy with Docker Compose
-          docker compose up -d postgres redis
-          echo "Waiting for postgres and redis to be healthy..."
-          sleep 30
-          
-          # Run airflow-init
-          docker compose up --no-start airflow-init
-          docker compose start airflow-init
-          docker compose logs airflow-init
-          
-          # Check if airflow-init completed successfully
-          INIT_EXIT_CODE=$(docker compose ps -q airflow-init | xargs docker inspect -f '{{.State.ExitCode}}')
-          if [ "$INIT_EXIT_CODE" != "0" ]; then
-            echo "airflow-init failed with exit code $INIT_EXIT_CODE"
-            exit 1
-          fi
-          
-          # Start the remaining services
-          docker compose up -d airflow-webserver airflow-scheduler airflow-worker flower data-pipeline
-          
-          # Check service status
-          docker compose ps
-          docker compose logs
-
-      # Cloud Composer deployment
-      - name: Validate DAGs for Cloud Composer
-        if: ${{ github.event.inputs.deployment_target == 'cloud_composer' || github.event.inputs.deployment_target == 'both' || contains(github.ref, 'main') || contains(github.ref, 'master') }}
+      # 🚀 Generate SSH Key for Compute Engine Access
+      - name: Generate SSH Key for GitHub Actions
         run: |
-          # Install airflow to validate DAGs
-          pip install apache-airflow==2.7.3 apache-airflow-providers-google>=8.0.0 apache-airflow-providers-docker>=3.7.0
-          
-          # Create a temporary directory for validation
-          mkdir -p /tmp/airflow/dags
-          cp -r dags/* /tmp/airflow/dags/
-          
-          # Validate DAGs
-          python -c "
-          import os
-          from airflow.models import DagBag
-          os.environ['AIRFLOW_HOME'] = '/tmp/airflow'
-          dagbag = DagBag(dag_folder='/tmp/airflow/dags', include_examples=False)
-          if dagbag.import_errors:
-              print('DAG import errors:')
-              for file, error in dagbag.import_errors.items():
-                  print(f'{file}: {error}')
-              exit(1)
-          else:
-              print('All DAGs validated successfully!')
-              for dag_id in dagbag.dag_ids:
-                  print(f'Found DAG: {dag_id}')
-          "
+          ssh-keygen -t rsa -b 4096 -C "github-actions" -N "" -f ~/.ssh/github-actions-key
+          echo "COMPUTE_ENGINE_SSH_KEY=$(cat ~/.ssh/github-actions-key)" >> $GITHUB_ENV
+          echo "✅ SSH Key generated."
 
+      # 🚀 Add SSH Key to Compute Engine
+      - name: Add SSH Key to Compute Engine
+        run: |
+          SSH_PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
+          gcloud compute instances add-metadata airflow-server \
+            --zone us-central1-a \
+            --metadata "ssh-keys=ubuntu:$SSH_PUBLIC_KEY"
+
+      # 🚀 Upload Docker Compose Files to Compute Engine
+      - name: Copy Docker Files to Compute Engine
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ env.COMPUTE_ENGINE_IP }}
+          username: "ubuntu"
+          key: ${{ env.COMPUTE_ENGINE_SSH_KEY }}
+          source: "docker-compose.yaml, .env, dags"
+          target: "~/airflow-deployment"
+
+      # 🚀 Deploy Airflow via SSH and Run Docker-Compose
+      - name: Run `docker-compose up` on Compute Engine
+        uses: appleboy/ssh-action@v0.1.12
+        with:
+          host: ${{ env.COMPUTE_ENGINE_IP }}
+          username: "ubuntu"
+          key: ${{ env.COMPUTE_ENGINE_SSH_KEY }}
+          script: |
+            sudo apt update && sudo apt install -y docker.io docker-compose
+            mkdir -p ~/airflow-deployment
+            cd ~/airflow-deployment
+            docker-compose down
+            docker-compose up -d --build
+            echo "✅ Airflow deployed successfully!"
+
+      - name: Show Airflow UI URL
+        run: |
+          echo "🌍 Airflow UI: http://${{ env.COMPUTE_ENGINE_IP }}:8080"
+
+      # ✅ Deploy DAGs to Cloud Composer (Optional)
       - name: Deploy DAGs to Cloud Composer
-        if: ${{ github.event.inputs.deployment_target == 'cloud_composer' || github.event.inputs.deployment_target == 'both' || contains(github.ref, 'main') || contains(github.ref, 'master') }}
+        if: ${{ github.event.inputs.deployment_target == 'cloud_composer' || github.event.inputs.deployment_target == 'both' }}
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_COMPOSER_ENVIRONMENT: ${{ secrets.GCP_COMPOSER_ENVIRONMENT }}
           GCP_COMPOSER_REGION: ${{ secrets.GCP_COMPOSER_REGION }}
         run: |
-          # Get the Cloud Composer DAGs folder
-          python -c "
-          from google.cloud import composer_v1
-          
-          client = composer_v1.EnvironmentsClient()
-          environment_path = client.environment_path('${{ env.GCP_PROJECT_ID }}', 
-                                                    '${{ env.GCP_COMPOSER_REGION }}', 
-                                                    '${{ env.GCP_COMPOSER_ENVIRONMENT }}')
-          response = client.get_environment(name=environment_path)
-          dags_bucket = response.config.dag_gcs_prefix
-          print(f'DAGS_BUCKET={dags_bucket}')
-          " > composer_env.sh
-          
-          source composer_env.sh
-          
-          # Upload DAGs to the Cloud Composer DAGs folder
+          DAGS_BUCKET=$(gcloud composer environments describe $GCP_COMPOSER_ENVIRONMENT \
+            --location=$GCP_COMPOSER_REGION \
+            --format="value(config.dagGcsPrefix)")
           echo "Uploading DAGs to $DAGS_BUCKET"
           gsutil -m cp -r dags/* $DAGS_BUCKET/
-          
-          echo "DAGs deployed successfully to Cloud Composer!"
 
-      - name: Clean up
-        if: always()
-        run: |
-          # Remove GCP key
-          rm -f secret/gcp-key.json
