@@ -2,7 +2,7 @@
 
 on:
   push:
-    branches: [ testing-pipeline ]
+    branches: testing-pipeline
   workflow_dispatch:
 
 jobs:
