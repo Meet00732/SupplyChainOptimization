@@ -170,6 +170,44 @@ To set up Google Cloud integration:
 - Custom logs are stored in the `logs/` directory
 - Performance metrics are available in the Airflow UI
 
+## GitHub Actions Deployment
+
+This project includes a GitHub Actions workflow for automated deployment. The workflow handles:
+
+1. Setting up the environment
+2. Creating necessary directories
+3. Configuring GCP credentials
+4. Deploying the application using Docker Compose
+
+### Prerequisites for GitHub Actions
+
+Before using the GitHub Actions workflow, you need to set up the following secret in your GitHub repository:
+
+- `GCP_SERVICE_ACCOUNT_KEY`: Your Google Cloud Platform service account key in JSON format
+
+### How to set up the GCP Service Account Key
+
+1. In the Google Cloud Console, go to IAM & Admin > Service Accounts
+2. Create a new service account or select an existing one
+3. Generate a new JSON key for the service account
+4. In your GitHub repository, go to Settings > Secrets and variables > Actions
+5. Create a new repository secret named `GCP_SERVICE_ACCOUNT_KEY`
+6. Paste the entire JSON content of your service account key file
+
+### Workflow Execution
+
+The workflow will run automatically on:
+- Pushes to the main/master branch
+- Pull requests to the main/master branch
+- Manual trigger via the "Run workflow" button in the Actions tab
+
+### Troubleshooting
+
+If the workflow fails, check the following:
+- Verify that the GCP service account key is correctly formatted and has the necessary permissions
+- Check the logs in the GitHub Actions run for specific error messages
+- Ensure that all required environment variables are correctly set in the workflow file
+
 ## License
 
 This project is licensed under the terms of the LICENSE file included in the repository.
