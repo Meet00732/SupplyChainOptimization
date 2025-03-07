@@ -51,10 +51,12 @@ jobs:
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
-      # ✅ Deploy to Compute Engine Only if Selected
+      # ✅ Deploy to Compute Engine Only if Selected or Defaulting to Compute Engine
       - name: Deploy to Compute Engine
-        if: ${{ inputs.deployment_target == 'compute_engine' || inputs.deployment_target == 'both' }}
+        if: ${{ github.event_name == 'push' || inputs.deployment_target == 'compute_engine' || inputs.deployment_target == 'both' }}
         run: |
+          echo "🚀 Starting Compute Engine Deployment..."
+
           # ✅ Generate SSH Key (Only If Not Exists)
           if [ ! -f ~/.ssh/github-actions-key ]; then
             ssh-keygen -t rsa -b 4096 -C "github-actions" -N "" -f ~/.ssh/github-actions-key
