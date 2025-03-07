@@ -1,104 +1,135 @@
-name: Data-Pipeline
+name: Deploy Supply Chain Optimization
 
 on:
   push:
-    branches:
-      - testing-pipeline
+    branches: testing-pipeline
+  workflow_dispatch:
 
 jobs:
-  test-and-build:
-    name: Test and Build
+  deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v3
-
+      
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
-
-      - name: Install Dependencies
+          python-version: '3.10'
+      
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r Data_Pipeline/requirements-test.txt
-
-      - name: Set PYTHONPATH
-        run: echo "PYTHONPATH=$PYTHONPATH:$(pwd)/Data_Pipeline" >> $GITHUB_ENV
-
-      - name: Install Coverage
-        run: pip install coverage
-
-      - name: Run Unit Tests with Coverage
+          pip install docker-compose
+      
+      - name: Create secret directory
+        run: mkdir -p secret
+      
+      - name: Set up GCP credentials
         run: |
-          coverage run -m unittest discover -s Data_Pipeline/tests -p "test*.py"
-          coverage report
-
-      - name: Set Up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Verify .env Exists
-        run: |
-          if [ -f .env ]; then
-            echo "✅ .env file exists!"
-            cat .env
-          else
-            echo "❌ .env file is missing!"
-            exit 1
-          fi
-
-      - name: Load Environment Variables from .env
-        run: |
-          set -a
-          source .env || true
-          set +a
-          env | grep "AIRFLOW\|POSTGRES\|REDIS"
-        shell: bash
-
-      - name: Inject GCP Key into .env
-        run: |
-          mkdir -p secret  # Ensure the directory exists
-          echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" > secret/gcp-key.json
-          chmod 600 secret/gcp-key.json  # Fix permissions
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/secret/gcp-key.json" >> $GITHUB_ENV
-          # Verify key content (safely)
+          echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > secret/gcp-key.json
+          chmod 600 secret/gcp-key.json
+          # Verify the file exists and has content
+          ls -la secret/
           if [ -s secret/gcp-key.json ]; then
             echo "✅ GCP Key has content"
-            # Print first few characters to verify it's a JSON (without revealing sensitive data)
-            head -c 20 secret/gcp-key.json | grep -q "{" && echo "✅ GCP Key appears to be valid JSON" || echo "❌ GCP Key does not appear to be valid JSON"
+            # Verify it's valid JSON
+            if jq . secret/gcp-key.json > /dev/null 2>&1; then
+              echo "✅ GCP Key appears to be valid JSON"
+            else
+              echo "❌ GCP Key is not valid JSON"
+              exit 1
+            fi
           else
-            echo "❌ GCP Key file is empty!"
+            echo "❌ GCP Key is empty"
             exit 1
           fi
-
-      - name: Verify GCP Key
+      
+      - name: Create .env file
         run: |
-          if [ -f "secret/gcp-key.json" ]; then
-            echo "✅ GCP Key exists!"
-            # Check file size
-            stat -c "File size: %s bytes" secret/gcp-key.json
+          cat > .env << 'EOL'
+          # PostgreSQL Configuration
+          POSTGRES_USER=airflow
+          POSTGRES_PASSWORD=airflow
+          POSTGRES_DB=airflow
+
+          # Airflow Configuration
+          AIRFLOW_DATABASE_PASSWORD=airflow
+          AIRFLOW_FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+          REDIS_PASSWORD=redispass
+
+          # Airflow Admin User
+          AIRFLOW_ADMIN_USERNAME=admin
+          AIRFLOW_ADMIN_PASSWORD=admin
+          AIRFLOW_ADMIN_FIRSTNAME=Admin
+          AIRFLOW_ADMIN_LASTNAME=User
+          AIRFLOW_ADMIN_EMAIL=admin@example.com
+
+          # Airflow UID
+          AIRFLOW_UID=50000
+
+          # Docker Group ID
+          DOCKER_GID=0
+
+          # Airflow Image
+          AIRFLOW_IMAGE_NAME=apache/airflow:2.7.3-python3.10
+          
+          # GCP Configuration
+          GOOGLE_APPLICATION_CREDENTIALS=/app/secret/gcp-key.json
+          EOL
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Create necessary directories
+        run: |
+          mkdir -p logs
+          mkdir -p dags
+          mkdir -p plugins
+          chmod -R 777 logs dags plugins
+      
+      - name: List files to verify docker-compose.yaml exists
+        run: |
+          ls -la
+          echo "Checking if docker-compose.yaml exists"
+          if [ -f "docker-compose.yaml" ]; then
+            echo "✅ docker-compose.yaml exists"
           else
-            echo "❌ GCP Key is missing!" && exit 1
+            echo "❌ docker-compose.yaml does not exist"
+            exit 1
           fi
-
-      - name: Remove Existing Airflow Init Container
-        run: docker compose rm -f airflow-init || true
-
-      - name: Start Docker Compose
-        run: docker compose up -d --build
-
-      - name: Debug Airflow Logs
+      
+      - name: Modify airflow-init command
         run: |
-          echo "Waiting for airflow-init to complete..."
-          sleep 30  # Give some time for logs to be generated
-          echo "=== AIRFLOW INIT LOGS ==="
-          docker compose logs airflow-init
-          echo "=== CONTAINER INSPECTION ==="
-          docker inspect airflow-init --format='{{.State.ExitCode}}: {{.State.Error}}'
-          echo "=== CHECKING GCP KEY IN CONTAINER ==="
-          docker compose exec -T data-pipeline-container ls -la /app/secret/ || true
-          docker compose exec -T data-pipeline-container stat /app/secret/gcp-key.json || true
-
-      - name: Verify Containers are Running
-        run: docker ps -a
+          # Create a temporary file with the modified docker-compose
+          sed '/airflow-init:/,/depends_on:/s/command: >/command: >-/' docker-compose.yaml > docker-compose.temp.yaml
+          # Replace the original file
+          mv docker-compose.temp.yaml docker-compose.yaml
+      
+      - name: Deploy with Docker Compose
+        run: |
+          docker-compose up -d postgres redis
+          # Wait for postgres and redis to be healthy
+          echo "Waiting for postgres and redis to be healthy..."
+          sleep 30
+          
+          # Run airflow-init separately with more detailed output
+          docker-compose up --no-start airflow-init
+          docker-compose start airflow-init
+          docker-compose logs airflow-init
+          
+          # Check if airflow-init completed successfully
+          INIT_EXIT_CODE=$(docker-compose ps -q airflow-init | xargs docker inspect -f '{{.State.ExitCode}}')
+          if [ "$INIT_EXIT_CODE" != "0" ]; then
+            echo "airflow-init failed with exit code $INIT_EXIT_CODE"
+            exit 1
+          fi
+          
+          # Start the remaining services
+          docker-compose up -d airflow-webserver airflow-scheduler airflow-worker flower data-pipeline
+      
+      - name: Check service status
+        run: |
+          docker-compose ps
+          docker-compose logs
