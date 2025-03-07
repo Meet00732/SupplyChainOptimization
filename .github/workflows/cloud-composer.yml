@@ -86,6 +86,8 @@ jobs:
           echo "COMPUTE_ENGINE_IP=$EXTERNAL_IP" >> $GITHUB_ENV
           echo "🌍 Compute Engine IP: $EXTERNAL_IP"
 
+      
+
       # 🚀 Generate SSH Key for Compute Engine Access
       - name: Generate SSH Key for GitHub Actions
         run: |
@@ -94,12 +96,13 @@ jobs:
           echo "✅ SSH Key generated."
 
       # 🚀 Add SSH Key to Compute Engine
-      - name: Add SSH Key to Compute Engine
+      - name: Add SSH Key to Compute Engine Metadata
         run: |
-          SSH_PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
+          PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
           gcloud compute instances add-metadata airflow-server \
             --zone us-central1-a \
-            --metadata "ssh-keys=ubuntu:$SSH_PUBLIC_KEY"
+            --metadata ssh-keys="ubuntu:${PUBLIC_KEY}"
+
 
       # 🚀 Upload Docker Compose Files to Compute Engine
       - name: Copy Docker Files to Compute Engine
