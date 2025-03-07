@@ -112,7 +112,7 @@ jobs:
 
       # 🚀 Deploy Airflow via SSH and Run Docker-Compose
       - name: Run `docker-compose up` on Compute Engine
-        uses: appleboy/ssh-action@v0.1.12
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ env.COMPUTE_ENGINE_IP }}
           username: "ubuntu"
