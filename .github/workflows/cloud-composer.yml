@@ -57,7 +57,7 @@ jobs:
         run: |
           echo "🚀 Starting Compute Engine Deployment..."
 
-          # ✅ Generate SSH Key (Only If Not Exists)
+          # ✅ Ensure SSH Key Exists
           if [ ! -f ~/.ssh/github-actions-key ]; then
             ssh-keygen -t rsa -b 4096 -C "github-actions" -N "" -f ~/.ssh/github-actions-key
             echo "✅ SSH Key generated!"
@@ -65,9 +65,9 @@ jobs:
             echo "✅ SSH Key already exists!"
           fi
 
-          # ✅ Add SSH Key to Compute Engine (Only If Not Exists)
+          # ✅ Ensure SSH Key is Added to Compute Engine
           PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
-          EXISTING_KEYS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(metadata.ssh-keys)")
+          EXISTING_KEYS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(metadata.ssh-keys)" || echo "")
           if [[ "$EXISTING_KEYS" != *"$PUBLIC_KEY"* ]]; then
             gcloud compute instances add-metadata airflow-server --zone us-central1-a --metadata=ssh-keys="${{ secrets.COMPUTE_ENGINE_USER }}:$PUBLIC_KEY"
             echo "✅ SSH Key added to Compute Engine!"
@@ -76,7 +76,7 @@ jobs:
           fi
 
           # ✅ Ensure Compute Engine is Running
-          INSTANCE_STATUS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(status)")
+          INSTANCE_STATUS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(status)" || echo "STOPPED")
           if [[ "$INSTANCE_STATUS" != "RUNNING" ]]; then
             echo "🚀 Starting Compute Engine instance..."
             gcloud compute instances start airflow-server --zone us-central1-a
@@ -85,11 +85,43 @@ jobs:
             echo "✅ Compute Engine is already running."
           fi
 
+          # ✅ Prepare Airflow Directory on Compute Engine
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+            echo "🚀 Preparing Airflow directory on Compute Engine..."
+            sudo mkdir -p ~/airflow
+            sudo chown -R $USER:$USER ~/airflow
+            sudo chmod -R 777 ~/airflow
+            echo "✅ Airflow directory ready!"
+          EOF
+
           # ✅ Copy Project Files to Compute Engine
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key -r . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:~/airflow
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:~/airflow
 
           # ✅ Deploy Airflow on Compute Engine
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+            echo "🚀 Checking if Docker is installed..."
+            if ! command -v docker &> /dev/null; then
+              echo "⚠️ Docker not found. Installing..."
+              sudo apt-get update
+              sudo apt-get install -y docker.io
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              echo "✅ Docker installed!"
+            else
+              echo "✅ Docker is already installed."
+            fi
+
+            echo "🚀 Checking if Docker Compose is installed..."
+            if ! command -v docker-compose &> /dev/null; then
+              echo "⚠️ Docker Compose not found. Installing..."
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+              echo "✅ Docker Compose installed!"
+            else
+              echo "✅ Docker Compose is already installed."
+            fi
+
+            echo "🚀 Starting Airflow with Docker Compose..."
             cd ~/airflow
             sudo docker compose down
             sudo docker compose up -d
