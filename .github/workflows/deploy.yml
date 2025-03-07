@@ -109,27 +109,27 @@ jobs:
       
       - name: Deploy with Docker Compose
         run: |
-          docker-compose up -d postgres redis
+          docker compose up -d postgres redis
           # Wait for postgres and redis to be healthy
           echo "Waiting for postgres and redis to be healthy..."
           sleep 30
           
           # Run airflow-init separately with more detailed output
-          docker-compose up --no-start airflow-init
-          docker-compose start airflow-init
-          docker-compose logs airflow-init
+          docker compose up --no-start airflow-init
+          docker compose start airflow-init
+          docker compose logs airflow-init
           
           # Check if airflow-init completed successfully
-          INIT_EXIT_CODE=$(docker-compose ps -q airflow-init | xargs docker inspect -f '{{.State.ExitCode}}')
+          INIT_EXIT_CODE=$(docker compose ps -q airflow-init | xargs docker inspect -f '{{.State.ExitCode}}')
           if [ "$INIT_EXIT_CODE" != "0" ]; then
             echo "airflow-init failed with exit code $INIT_EXIT_CODE"
             exit 1
           fi
           
           # Start the remaining services
-          docker-compose up -d airflow-webserver airflow-scheduler airflow-worker flower data-pipeline
+          docker compose up -d airflow-webserver airflow-scheduler airflow-worker flower data-pipeline
       
       - name: Check service status
         run: |
-          docker-compose ps
-          docker-compose logs
+          docker compose ps
+          docker compose logs
