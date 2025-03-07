@@ -97,7 +97,8 @@ jobs:
           # ✅ Copy Project Files to Compute Engine
           rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:~/airflow
 
-          # ✅ Deploy Airflow on Compute Engine
+      - name: Deploy Airflow on Compute Engine
+        run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
             echo "🚀 Checking if Docker is installed..."
             if ! command -v docker &> /dev/null; then
@@ -112,10 +113,11 @@ jobs:
             fi
 
             echo "🚀 Checking if Docker Compose is installed..."
-            if ! command -v docker-compose &> /dev/null; then
+            if ! docker compose version &> /dev/null; then
               echo "⚠️ Docker Compose not found. Installing..."
               sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
+              sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
               echo "✅ Docker Compose installed!"
             else
               echo "✅ Docker Compose is already installed."
@@ -127,6 +129,7 @@ jobs:
             sudo docker compose up -d
             echo "✅ Airflow successfully started!"
           EOF
+
 
       # ✅ Deploy to Cloud Composer Only if Selected
       - name: Deploy DAGs to Cloud Composer
