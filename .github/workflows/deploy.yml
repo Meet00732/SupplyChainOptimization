@@ -2,7 +2,7 @@ name: Deploy Supply Chain Optimization
 
 on:
   push:
-    branches: testing-pipeline
+    branches: main
   workflow_dispatch:
 
 jobs:
