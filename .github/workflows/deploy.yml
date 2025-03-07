@@ -3,7 +3,7 @@ name: Data-Pipeline
 on:
   push:
     branches:
-      - data-pipeline-airflow-meet
+      - testing-pipeline
 
 jobs:
   test-and-build:
