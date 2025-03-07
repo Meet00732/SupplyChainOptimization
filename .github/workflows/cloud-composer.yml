@@ -33,10 +33,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r Data_Pipeline/requirements-test.txt
+
       - name: Set PYTHONPATH
         run: |
           echo "PYTHONPATH=$(pwd)/Data_Pipeline:$(pwd)" >> $GITHUB_ENV
           echo "PYTHONPATH set to $(pwd)/Data_Pipeline:$(pwd)"
+
       - name: Run Unit Tests
         run: |
           python -m unittest discover -s Data_Pipeline/tests -p "test*.py"
@@ -46,104 +48,60 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
 
-      - name: Set Up gcloud CLI
+      - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
-      # 🚀 Create Compute Engine Instance If It Does Not Exist
-      - name: Check and Create Compute Engine Instance
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          GCP_ZONE: "us-central1-a"
-          INSTANCE_NAME: "airflow-server"
-          MACHINE_TYPE: "e2-standard-2"
-          IMAGE_FAMILY: "debian-11"
-          IMAGE_PROJECT: "debian-cloud"
+      # ✅ Deploy to Compute Engine Only if Selected
+      - name: Deploy to Compute Engine
+        if: ${{ inputs.deployment_target == 'compute_engine' || inputs.deployment_target == 'both' }}
         run: |
-          INSTANCE_EXISTS=$(gcloud compute instances list --filter="name=($INSTANCE_NAME)" --format="value(name)")
-          
-          if [ -z "$INSTANCE_EXISTS" ]; then
-            echo "🚀 Creating new Compute Engine instance..."
-            gcloud compute instances create $INSTANCE_NAME \
-              --project=$GCP_PROJECT_ID \
-              --zone=$GCP_ZONE \
-              --machine-type=$MACHINE_TYPE \
-              --image-family=$IMAGE_FAMILY \
-              --image-project=$IMAGE_PROJECT \
-              --boot-disk-size=50GB \
-              --tags=http-server,https-server
-            echo "✅ Compute Engine instance created successfully."
+          # ✅ Generate SSH Key (Only If Not Exists)
+          if [ ! -f ~/.ssh/github-actions-key ]; then
+            ssh-keygen -t rsa -b 4096 -C "github-actions" -N "" -f ~/.ssh/github-actions-key
+            echo "✅ SSH Key generated!"
           else
-            echo "✅ Compute Engine instance already exists."
+            echo "✅ SSH Key already exists!"
           fi
 
-
-      # 🚀 Get Compute Engine External IP
-      - name: Get Compute Engine External IP
-        id: get-ip
-        run: |
-          EXTERNAL_IP=$(gcloud compute instances describe airflow-server \
-            --zone us-central1-a --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
-          echo "COMPUTE_ENGINE_IP=$EXTERNAL_IP" >> $GITHUB_ENV
-          echo "🌍 Compute Engine IP: $EXTERNAL_IP"
-
-      
-
-      # 🚀 Generate SSH Key for Compute Engine Access
-      - name: Generate SSH Key for GitHub Actions
-        run: |
-          ssh-keygen -t rsa -b 4096 -C "github-actions" -N "" -f ~/.ssh/github-actions-key
-          echo "COMPUTE_ENGINE_SSH_KEY=$(cat ~/.ssh/github-actions-key)" >> $GITHUB_ENV
-          echo "✅ SSH Key generated."
-
-      # 🚀 Add SSH Key to Compute Engine
-      - name: Add SSH Key to Compute Engine Metadata
-        run: |
+          # ✅ Add SSH Key to Compute Engine (Only If Not Exists)
           PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
-          gcloud compute instances add-metadata airflow-server \
-            --zone us-central1-a \
-            --metadata ssh-keys="ubuntu:${PUBLIC_KEY}"
+          EXISTING_KEYS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(metadata.ssh-keys)")
+          if [[ "$EXISTING_KEYS" != *"$PUBLIC_KEY"* ]]; then
+            gcloud compute instances add-metadata airflow-server --zone us-central1-a --metadata=ssh-keys="${{ secrets.COMPUTE_ENGINE_USER }}:$PUBLIC_KEY"
+            echo "✅ SSH Key added to Compute Engine!"
+          else
+            echo "✅ SSH Key already exists in Compute Engine!"
+          fi
 
+          # ✅ Ensure Compute Engine is Running
+          INSTANCE_STATUS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(status)")
+          if [[ "$INSTANCE_STATUS" != "RUNNING" ]]; then
+            echo "🚀 Starting Compute Engine instance..."
+            gcloud compute instances start airflow-server --zone us-central1-a
+            echo "✅ Compute Engine started."
+          else
+            echo "✅ Compute Engine is already running."
+          fi
 
-      # 🚀 Upload Docker Compose Files to Compute Engine
-      - name: Copy Docker Files to Compute Engine
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ env.COMPUTE_ENGINE_IP }}
-          username: "ubuntu"
-          key: ${{ env.COMPUTE_ENGINE_SSH_KEY }}
-          source: "docker-compose.yaml, .env, dags"
-          target: "~/airflow-deployment"
+          # ✅ Copy Project Files to Compute Engine
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key -r . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:~/airflow
 
-      # 🚀 Deploy Airflow via SSH and Run Docker-Compose
-      - name: Run `docker-compose up` on Compute Engine
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ env.COMPUTE_ENGINE_IP }}
-          username: "ubuntu"
-          key: ${{ env.COMPUTE_ENGINE_SSH_KEY }}
-          script: |
-            sudo apt update && sudo apt install -y docker.io docker-compose
-            mkdir -p ~/airflow-deployment
-            cd ~/airflow-deployment
-            docker-compose down
-            docker-compose up -d --build
-            echo "✅ Airflow deployed successfully!"
+          # ✅ Deploy Airflow on Compute Engine
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+            cd ~/airflow
+            sudo docker-compose down
+            sudo docker-compose up -d
+            echo "✅ Airflow successfully started!"
+          EOF
 
-      - name: Show Airflow UI URL
-        run: |
-          echo "🌍 Airflow UI: http://${{ env.COMPUTE_ENGINE_IP }}:8080"
-
-      # ✅ Deploy DAGs to Cloud Composer (Optional)
+      # ✅ Deploy to Cloud Composer Only if Selected
       - name: Deploy DAGs to Cloud Composer
-        if: ${{ github.event.inputs.deployment_target == 'cloud_composer' || github.event.inputs.deployment_target == 'both' }}
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          GCP_COMPOSER_ENVIRONMENT: ${{ secrets.GCP_COMPOSER_ENVIRONMENT }}
-          GCP_COMPOSER_REGION: ${{ secrets.GCP_COMPOSER_REGION }}
+        if: ${{ inputs.deployment_target == 'cloud_composer' || inputs.deployment_target == 'both' }}
         run: |
-          DAGS_BUCKET=$(gcloud composer environments describe $GCP_COMPOSER_ENVIRONMENT \
-            --location=$GCP_COMPOSER_REGION \
-            --format="value(config.dagGcsPrefix)")
-          echo "Uploading DAGs to $DAGS_BUCKET"
-          gsutil -m cp -r dags/* $DAGS_BUCKET/
+          echo "🚀 Uploading DAGs to Cloud Composer..."
+          gcloud storage cp -r Data_Pipeline/dags gs://your-cloud-composer-bucket/dags
+          echo "✅ DAGs uploaded successfully!"
 
+      # ✅ Remove SSH Key after deployment (Security)
+      - name: Remove SSH Key
+        run: rm -f ~/.ssh/github-actions-key ~/.ssh/github-actions-key.pub
