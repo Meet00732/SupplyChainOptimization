@@ -2,18 +2,8 @@ name: Deploy Supply Chain Optimization
 
 on:
   push:
-    branches: main
+    branches: testing-pipeline
   workflow_dispatch:
-    inputs:
-      deployment_target:
-        description: 'Where to deploy the DAGs'
-        required: true
-        default: 'local'
-        type: choice
-        options:
-          - local
-          - cloud_composer
-          - both
 
 jobs:
   deploy:
@@ -32,7 +22,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r Data_Pipeline/requirements-test.txt
-          pip install google-cloud-storage google-cloud-composer
       
       - name: Create secret directory
         run: mkdir -p secret
@@ -44,26 +33,21 @@ jobs:
           # Verify the file exists and has content
           ls -la secret/
           if [ -s secret/gcp-key.json ]; then
-            echo "GCP Key has content"
+            echo "✅ GCP Key has content"
             # Verify it's valid JSON
             if jq . secret/gcp-key.json > /dev/null 2>&1; then
-              echo "GCP Key appears to be valid JSON"
+              echo "✅ GCP Key appears to be valid JSON"
             else
-              echo "GCP Key is not valid JSON"
+              echo "❌ GCP Key is not valid JSON"
               exit 1
             fi
           else
-            echo "GCP Key is empty"
+            echo "❌ GCP Key is empty"
             exit 1
           fi
-          export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/secret/gcp-key.json"
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/secret/gcp-key.json" >> $GITHUB_ENV
       
-      # Local Docker Compose deployment (if needed)
-      - name: Local Deployment with Docker Compose
-        if: ${{ github.event.inputs.deployment_target == 'local' || github.event.inputs.deployment_target == 'both' || github.event.inputs.deployment_target == '' }}
+      - name: Create .env file
         run: |
-          # Create .env file
           cat > .env << 'EOL'
           # PostgreSQL Configuration
           POSTGRES_USER=airflow
@@ -94,26 +78,46 @@ jobs:
           # GCP Configuration
           GOOGLE_APPLICATION_CREDENTIALS=/app/secret/gcp-key.json
           EOL
-          
-          # Set up Docker
-          docker compose down
-          
-          # Create necessary directories
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Performing docker compose down
+        run: docker compose down
+      
+      - name: Create necessary directories
+        run: |
           mkdir -p logs
           mkdir -p dags
           mkdir -p plugins
           chmod -R 777 logs dags plugins
-          
-          # Modify airflow-init command
+      
+      - name: List files to verify docker-compose.yaml exists
+        run: |
+          ls -la
+          echo "Checking if docker-compose.yaml exists"
+          if [ -f "docker-compose.yaml" ]; then
+            echo "✅ docker-compose.yaml exists"
+          else
+            echo "❌ docker-compose.yaml does not exist"
+            exit 1
+          fi
+      
+      - name: Modify airflow-init command
+        run: |
+          # Create a temporary file with the modified docker-compose
           sed '/airflow-init:/,/depends_on:/s/command: >/command: >-/' docker-compose.yaml > docker-compose.temp.yaml
+          # Replace the original file
           mv docker-compose.temp.yaml docker-compose.yaml
-          
-          # Deploy with Docker Compose
+      
+      - name: Deploy with Docker Compose
+        run: |
           docker compose up -d postgres redis
+          # Wait for postgres and redis to be healthy
           echo "Waiting for postgres and redis to be healthy..."
           sleep 30
           
-          # Run airflow-init
+          # Run airflow-init separately with more detailed output
           docker compose up --no-start airflow-init
           docker compose start airflow-init
           docker compose logs airflow-init
@@ -127,69 +131,8 @@ jobs:
           
           # Start the remaining services
           docker compose up -d airflow-webserver airflow-scheduler airflow-worker flower data-pipeline
-          
-          # Check service status
+      
+      - name: Check service status
+        run: |
           docker compose ps
           docker compose logs
-      
-      # Cloud Composer deployment
-      - name: Validate DAGs for Cloud Composer
-        if: ${{ github.event.inputs.deployment_target == 'cloud_composer' || github.event.inputs.deployment_target == 'both' || contains(github.ref, 'main') || contains(github.ref, 'master') }}
-        run: |
-          # Install airflow to validate DAGs
-          pip install apache-airflow==2.7.3 apache-airflow-providers-google>=8.0.0 apache-airflow-providers-docker>=3.7.0
-          
-          # Create a temporary directory for validation
-          mkdir -p /tmp/airflow/dags
-          cp -r dags/* /tmp/airflow/dags/
-          
-          # Validate DAGs
-          python -c "
-          import os
-          from airflow.models import DagBag
-          os.environ['AIRFLOW_HOME'] = '/tmp/airflow'
-          dagbag = DagBag(dag_folder='/tmp/airflow/dags', include_examples=False)
-          if dagbag.import_errors:
-              print('DAG import errors:')
-              for file, error in dagbag.import_errors.items():
-                  print(f'{file}: {error}')
-              exit(1)
-          else:
-              print('All DAGs validated successfully!')
-              for dag_id in dagbag.dag_ids:
-                  print(f'Found DAG: {dag_id}')
-          "
-      
-      - name: Deploy DAGs to Cloud Composer
-        if: ${{ github.event.inputs.deployment_target == 'cloud_composer' || github.event.inputs.deployment_target == 'both' || contains(github.ref, 'main') || contains(github.ref, 'master') }}
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          GCP_COMPOSER_ENVIRONMENT: ${{ secrets.GCP_COMPOSER_ENVIRONMENT }}
-          GCP_COMPOSER_REGION: ${{ secrets.GCP_COMPOSER_REGION }}
-        run: |
-          # Get the Cloud Composer DAGs folder
-          python -c "
-          from google.cloud import composer_v1
-          
-          client = composer_v1.EnvironmentsClient()
-          environment_path = client.environment_path('${{ env.GCP_PROJECT_ID }}', 
-                                                    '${{ env.GCP_COMPOSER_REGION }}', 
-                                                    '${{ env.GCP_COMPOSER_ENVIRONMENT }}')
-          response = client.get_environment(name=environment_path)
-          dags_bucket = response.config.dag_gcs_prefix
-          print(f'DAGS_BUCKET={dags_bucket}')
-          " > composer_env.sh
-          
-          source composer_env.sh
-          
-          # Upload DAGs to the Cloud Composer DAGs folder
-          echo "Uploading DAGs to $DAGS_BUCKET"
-          gsutil -m cp -r dags/* $DAGS_BUCKET/
-          
-          echo "DAGs deployed successfully to Cloud Composer!"
-      
-      - name: Clean up
-        if: always()
-        run: |
-          # Remove GCP key
-          rm -f secret/gcp-key.json
