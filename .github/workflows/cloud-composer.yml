@@ -9,7 +9,7 @@ on:
         description: 'Where to deploy Airflow'
         required: true
         default: 'compute_engine'
-        type: choice
+        type: choice 
         options:
           - local
           - cloud_composer
@@ -51,7 +51,6 @@ jobs:
 
       # 🚀 Create Compute Engine Instance If It Does Not Exist
       - name: Check and Create Compute Engine Instance
-        if: ${{ github.event.inputs.deployment_target == 'compute_engine' || github.event.inputs.deployment_target == 'both' }}
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_ZONE: "us-central1-a"
@@ -72,9 +71,11 @@ jobs:
               --image-project=$IMAGE_PROJECT \
               --boot-disk-size=50GB \
               --tags=http-server,https-server
+            echo "✅ Compute Engine instance created successfully."
           else
             echo "✅ Compute Engine instance already exists."
           fi
+
 
       # 🚀 Get Compute Engine External IP
       - name: Get Compute Engine External IP
