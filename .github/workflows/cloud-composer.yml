@@ -32,7 +32,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r Data_Pipeline/requirements-test.txt
-          pip install google-cloud-storage google-cloud-composer
 
       - name: Run Unit Tests Before Deployment
         run: |
