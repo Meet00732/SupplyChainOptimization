@@ -4,7 +4,7 @@ secret/*
 # Ignore environment files
 # .env
 
-__pycache__/
+__pycache__
 .coverage
 .vscode
 /data
