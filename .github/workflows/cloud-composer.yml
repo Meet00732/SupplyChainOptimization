@@ -138,7 +138,7 @@ jobs:
             echo "🚀 Fixing Airflow log directory permissions..."
             sudo mkdir -p /opt/airflow/logs
             sudo chmod -R 777 /opt/airflow/logs
-            sudo chown -R ${AIRFLOW_UID:-50000}:0 /opt/airflow/logs
+            sudo chown -R $USER:$USER /opt/airflow/logs
             echo "✅ Log directory permissions fixed."
 
             echo "🚀 Starting Airflow with Docker Compose..."
