@@ -120,6 +120,12 @@ jobs:
             newgrp docker
             sudo systemctl restart docker
 
+            # ✅ Create GCP Key File from GitHub Secret
+            echo "🚀 Creating GCP Key File..."
+            echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > ~/airflow/gcp-key.json
+            chmod 600 ~/airflow/gcp-key.json
+            echo "✅ GCP Key File Created."
+
             # ✅ Fix Airflow Log Directory Permissions
             echo "🚀 Fixing Airflow log directory permissions..."
             sudo mkdir -p /opt/airflow/logs
