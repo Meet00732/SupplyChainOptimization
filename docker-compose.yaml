@@ -27,6 +27,7 @@ x-airflow-common:
     # - ./secret/gcp-key.json:/opt/airflow/gcp-key.json
     - /var/run/docker.sock:/var/run/docker.sock
     - ~/airflow/gcp-key.json:/opt/airflow/gcp-key.json
+
   user: "${AIRFLOW_UID:-50000}:${DOCKER_GID:-0}"
   group_add:
     - "${DOCKER_GID:-0}"
@@ -137,6 +138,7 @@ services:
       -c "
       mkdir -p /opt/airflow/logs &&
       chmod -R 777 /opt/airflow/logs &&
+      chown -R ${AIRFLOW_UID:-50000}:${DOCKER_GID:-0} /opt/airflow/logs &&
       airflow db migrate &&
       airflow users create --username ${AIRFLOW_ADMIN_USERNAME:-admin} --password ${AIRFLOW_ADMIN_PASSWORD:-admin} --firstname ${AIRFLOW_ADMIN_FIRSTNAME:-Anonymous} --lastname ${AIRFLOW_ADMIN_LASTNAME:-Admin} --role Admin --email ${AIRFLOW_ADMIN_EMAIL:-admin@example.com} &&
       airflow connections delete google_cloud_default || true &&
@@ -151,6 +153,7 @@ services:
       _AIRFLOW_WWW_USER_FIRSTNAME: ${AIRFLOW_ADMIN_FIRSTNAME:-Anonymous}
       _AIRFLOW_WWW_USER_LASTNAME: ${AIRFLOW_ADMIN_LASTNAME:-Admin}
       _AIRFLOW_WWW_USER_EMAIL: ${AIRFLOW_ADMIN_EMAIL:-admin@example.com}
+    volumes: *airflow-common-volumes
     depends_on:
       <<: *airflow-common-depends-on
 
