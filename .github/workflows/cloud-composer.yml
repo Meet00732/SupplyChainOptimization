@@ -120,6 +120,9 @@ jobs:
             newgrp docker
             sudo systemctl restart docker
 
+            mkdir -p ~/airflow
+            echo "airflow dir created."
+
             # ✅ Fix: Ensure gcp-key.json is a file, not a directory
             echo "🚀 Ensuring GCP Key File exists..."
             if [ -d ~/airflow/gcp-key.json ]; then
@@ -127,11 +130,11 @@ jobs:
                 sudo rm -rf ~/airflow/gcp-key.json
             fi
 
-            # ✅ Create the GCP Key File from GitHub Secret
             echo "🚀 Creating GCP Key File..."
-            echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" | base64 --decode > ~/airflow/gcp-key.json
+            echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" | tr -d '\r' > ~/airflow/gcp-key.json
             chmod 600 ~/airflow/gcp-key.json
             echo "✅ GCP Key File Created."
+
 
 
             echo "🚀 Fixing Airflow log directory permissions..."
