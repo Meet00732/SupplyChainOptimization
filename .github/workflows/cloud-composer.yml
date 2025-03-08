@@ -123,7 +123,6 @@ jobs:
             mkdir -p ~/airflow
             echo "airflow dir created."
 
-            # ✅ Fix: Ensure gcp-key.json is a file, not a directory
             echo "🚀 Ensuring GCP Key File exists..."
             if [ -d ~/airflow/gcp-key.json ]; then
                 echo "⚠️ Found directory at ~/airflow/gcp-key.json. Removing it..."
@@ -134,7 +133,6 @@ jobs:
             echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" | tr -d '\r' > ~/airflow/gcp-key.json
             chmod 600 ~/airflow/gcp-key.json
             echo "✅ GCP Key File Created."
-
 
 
             echo "🚀 Fixing Airflow log directory permissions..."

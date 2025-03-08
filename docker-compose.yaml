@@ -17,7 +17,7 @@ x-airflow-common:
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
     AIRFLOW__CELERY__BROKER_CONNECTION_RETRY_ON_STARTUP: 'true'
     # _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-apache-airflow-providers-google>=8.0.0,<9.0.0 google-cloud-storage>=1.30.0,<2.0.0 docker>=6.1.0 apache-airflow-providers-docker>=3.7.0}
-    GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-key.json
+    GOOGLE_APPLICATION_CREDENTIALS: "/opt/airflow/gcp-key.json"
 
   volumes: &airflow-common-volumes
     - ./dags:/opt/airflow/dags
@@ -26,7 +26,7 @@ x-airflow-common:
     - ./Data_Pipeline/scripts:/app/scripts
     # - ./secret/gcp-key.json:/opt/airflow/gcp-key.json
     - /var/run/docker.sock:/var/run/docker.sock
-    - ./gcp-key.json:/opt/airflow/gcp-key.json:ro
+    # - ./gcp-key.json:/opt/airflow/gcp-key.json:ro
 
   user: "${AIRFLOW_UID:-50000}:${DOCKER_GID:-0}"
   group_add:
@@ -138,13 +138,13 @@ services:
       -c "
       mkdir -p /opt/airflow/logs &&
       chmod -R 777 /opt/airflow/logs &&
-      chown -R ${AIRFLOW_UID:-50000}:0 /opt/airflow/logs ||
-      echo '⚠️ Unable to change owner of logs, continuing...'
+      chown -R ${AIRFLOW_UID:-50000}:0 /opt/airflow/logs || echo '⚠️ Unable to change owner of logs, continuing...'
       airflow db migrate &&
       airflow users create --username ${AIRFLOW_ADMIN_USERNAME:-admin} --password ${AIRFLOW_ADMIN_PASSWORD:-admin} --firstname ${AIRFLOW_ADMIN_FIRSTNAME:-Anonymous} --lastname ${AIRFLOW_ADMIN_LASTNAME:-Admin} --role Admin --email ${AIRFLOW_ADMIN_EMAIL:-admin@example.com} &&
       airflow connections delete google_cloud_default || true &&
-      airflow connections add 'google_cloud_default' --conn-type 'google_cloud_platform' --conn-extra '{\"extra__google_cloud_platform__key_path\": \"/opt/airflow/gcp-key.json\"}'
+      airflow connections add 'google_cloud_default' --conn-type 'google_cloud_platform' --conn-extra '{\"extra__google_cloud_platform__key_path\": \"/opt/airflow/gcp-key.json\"}' || echo '⚠️ Connection already exists, skipping...'
       "
+
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
