@@ -120,6 +120,12 @@ jobs:
             newgrp docker
             sudo systemctl restart docker
 
+            # ✅ Fix Airflow Log Directory Permissions
+            echo "🚀 Fixing Airflow log directory permissions..."
+            sudo mkdir -p /opt/airflow/logs
+            sudo chmod -R 777 /opt/airflow/logs
+            sudo chown -R airflow:airflow /opt/airflow/logs
+
             echo "🚀 Starting Airflow with Docker Compose..."
             cd ~/airflow
             docker compose up -d postgres redis
