@@ -120,17 +120,25 @@ jobs:
             newgrp docker
             sudo systemctl restart docker
 
-            # ✅ Create GCP Key File from GitHub Secret
+            # ✅ Fix: Ensure gcp-key.json is a file, not a directory
+            echo "🚀 Ensuring GCP Key File exists..."
+            if [ -d ~/airflow/gcp-key.json ]; then
+                echo "⚠️ Found directory at ~/airflow/gcp-key.json. Removing it..."
+                sudo rm -rf ~/airflow/gcp-key.json
+            fi
+
+            # ✅ Create the GCP Key File from GitHub Secret
             echo "🚀 Creating GCP Key File..."
-            echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > ~/airflow/gcp-key.json
+            echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" | base64 --decode > ~/airflow/gcp-key.json
             chmod 600 ~/airflow/gcp-key.json
             echo "✅ GCP Key File Created."
 
-            # ✅ Fix Airflow Log Directory Permissions
+
             echo "🚀 Fixing Airflow log directory permissions..."
             sudo mkdir -p /opt/airflow/logs
             sudo chmod -R 777 /opt/airflow/logs
             sudo chown -R ${AIRFLOW_UID:-50000}:0 /opt/airflow/logs
+            echo "✅ Log directory permissions fixed."
 
             echo "🚀 Starting Airflow with Docker Compose..."
             cd ~/airflow
