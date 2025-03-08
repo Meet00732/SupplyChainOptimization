@@ -143,6 +143,7 @@ jobs:
 
             echo "🚀 Starting Airflow with Docker Compose..."
             cd ~/airflow
+            docker compose up data-pipeline
             docker compose up -d postgres redis
             # Wait for postgres and redis to be healthy
             echo "Waiting for postgres and redis to be healthy..."
@@ -152,6 +153,9 @@ jobs:
             docker compose up --no-start airflow-init
             docker compose start airflow-init
             docker compose logs airflow-init
+
+            docker compose up -d airflow-webserver
+
             echo "✅ Airflow successfully started!"
           EOF
 

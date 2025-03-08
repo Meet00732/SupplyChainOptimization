@@ -156,7 +156,7 @@ services:
     volumes: *airflow-common-volumes
     depends_on:
       <<: *airflow-common-depends-on
-    user: "root" 
+    user: "root"
 
   flower:
     <<: *airflow-common
