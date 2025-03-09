@@ -48,19 +48,36 @@ jobs:
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
-      - name: Grant Required IAM Roles to Service Account
+      - name: Persist SSH Key to Compute Engine
         run: |
-          echo "🚀 Granting required IAM roles to service account..."
-          gcloud projects add-iam-policy-binding ${{ secrets.GCP_PROJECT_ID }} \
-            --member "serviceAccount:cloudcomputefordocker@primordial-veld-450618-n4.iam.gserviceaccount.com" \
-            --role "roles/compute.admin"
-          gcloud projects add-iam-policy-binding ${{ secrets.GCP_PROJECT_ID }} \
-            --member "serviceAccount:cloudcomputefordocker@primordial-veld-450618-n4.iam.gserviceaccount.com" \
-            --role "roles/storage.admin"
-          gcloud projects add-iam-policy-binding ${{ secrets.GCP_PROJECT_ID }} \
-            --member "serviceAccount:cloudcomputefordocker@primordial-veld-450618-n4.iam.gserviceaccount.com" \
-            --role "roles/iam.serviceAccountUser"
-          echo "✅ IAM roles successfully assigned!"
+          echo "🚀 Persisting SSH Key to Compute Engine..."
+          if [ ! -f ~/.ssh/github-actions-key ]; then
+            ssh-keygen -t rsa -b 4096 -C "github-actions" -N "" -f ~/.ssh/github-actions-key
+            echo "✅ SSH Key generated!"
+          else
+            echo "✅ SSH Key already exists!"
+          fi
+          PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
+          gcloud compute instances add-metadata airflow-server --zone us-central1-a --metadata=ssh-keys="${{ secrets.COMPUTE_ENGINE_USER }}:$PUBLIC_KEY"
+          echo "✅ SSH Key added to Compute Engine!"
+
+      # ✅ Grant Required IAM Roles Inside VM (No Stopping Required)
+      - name: Grant Required IAM Roles via SSH
+        run: |
+          echo "🚀 Granting IAM roles to service account inside VM..."
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+            echo "✅ Authenticated. Applying IAM role changes..."
+            gcloud projects add-iam-policy-binding ${{ secrets.GCP_PROJECT_ID }} \
+              --member "serviceAccount:cloudcomputefordocker@primordial-veld-450618-n4.iam.gserviceaccount.com" \
+              --role "roles/compute.admin"
+            gcloud projects add-iam-policy-binding ${{ secrets.GCP_PROJECT_ID }} \
+              --member "serviceAccount:cloudcomputefordocker@primordial-veld-450618-n4.iam.gserviceaccount.com" \
+              --role "roles/storage.admin"
+            gcloud projects add-iam-policy-binding ${{ secrets.GCP_PROJECT_ID }} \
+              --member "serviceAccount:cloudcomputefordocker@primordial-veld-450618-n4.iam.gserviceaccount.com" \
+              --role "roles/iam.serviceAccountUser"
+            echo "✅ IAM roles successfully assigned inside VM!"
+          EOF
 
       # ✅ Deploy to Compute Engine (Since airflow-server already exists)
       - name: Deploy to Compute Engine
