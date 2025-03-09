@@ -49,6 +49,24 @@ jobs:
         uses: google-github-actions/setup-gcloud@v1
 
 
+      - name: Ensure SSH Key Exists & Inject to VM Metadata
+        run: |
+          echo "🚀 Ensuring SSH key exists..."
+          mkdir -p ~/.ssh
+          if [ ! -f ~/.ssh/github-actions-key ]; then
+            ssh-keygen -t rsa -b 4096 -C "github-actions" -N "" -f ~/.ssh/github-actions-key
+            echo "✅ SSH Key generated!"
+          else
+            echo "✅ SSH Key already exists!"
+          fi
+
+          echo "🚀 Adding SSH key to Compute Engine Metadata..."
+          PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
+          gcloud compute instances add-metadata airflow-server \
+            --zone us-central1-a \
+            --metadata=ssh-keys="${{ secrets.COMPUTE_ENGINE_USER }}:$PUBLIC_KEY"
+          echo "✅ SSH Key added to Compute Engine!"
+
       - name: Attach Service Account to VM (Without Stopping)
         run: |
           echo "🚀 Attaching service account to airflow-server..."
@@ -57,9 +75,11 @@ jobs:
             --metadata enable-oslogin=TRUE
           
           echo "🚀 Manually authenticating service account inside VM..."
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+            echo "✅ Authenticated. Applying IAM role changes..."
             gcloud auth activate-service-account cloudcomputefordocker@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com --key-file=/opt/airflow/gcp-key.json
             gcloud config set account cloudcomputefordocker@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+            echo "✅ Service account authentication completed."
           EOF
           echo "✅ Service account attached and authenticated successfully."
 
