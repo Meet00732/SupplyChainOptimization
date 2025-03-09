@@ -88,6 +88,12 @@ jobs:
       - name: Sync Airflow Project Files to Compute Engine
         run: |
           echo "🚀 Syncing project files to airflow-server..."
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+          sudo mkdir -p /opt/airflow
+          sudo chown -R $USER:$USER /opt/airflow
+          sudo chmod -R 775 /opt/airflow
+          EOF
+
           rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
           echo "✅ Files synced successfully."
 
