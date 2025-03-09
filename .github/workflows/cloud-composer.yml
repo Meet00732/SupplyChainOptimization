@@ -60,12 +60,29 @@ jobs:
           gcloud compute instances set-service-account airflow-server \
             --zone us-central1-a \
             --service-account cloudcomputefordocker@primordial-veld-450618-n4.iam.gserviceaccount.com \
-            --scopes cloud-platform
+            --scopes "https://www.googleapis.com/auth/cloud-platform"
+
+          echo "⏳ Waiting for permission changes to take effect (30s)..."
+          sleep 30
 
           echo "🚀 Restarting airflow-server..."
           gcloud compute instances start airflow-server --zone us-central1-a
 
           echo "✅ VM access scopes updated successfully!"
+
+      # ✅ Ensure SSH Access after VM Restart
+      - name: Wait for SSH to be Ready
+        run: |
+          echo "🚀 Waiting for airflow-server to be reachable..."
+          EXTERNAL_IP=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
+          
+          echo "🌍 Checking SSH access on $EXTERNAL_IP..."
+          for i in {1..10}; do
+            nc -zv -w5 $EXTERNAL_IP 22 && break
+            echo "⏳ SSH not available yet. Retrying in 10 seconds..."
+            sleep 10
+          done
+          echo "✅ SSH is now available!"
 
       # ✅ Deploy to Compute Engine (Since airflow-server already exists)
       - name: Deploy to Compute Engine
