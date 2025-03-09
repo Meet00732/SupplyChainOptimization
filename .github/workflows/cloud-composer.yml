@@ -48,61 +48,6 @@ jobs:
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
-      # ✅ **Persist SSH Key to Prevent Connectivity Issues**
-      - name: Persist SSH Key to Compute Engine Metadata
-        run: |
-          echo "🚀 Persisting SSH Key to Compute Engine..."
-          if [ ! -f ~/.ssh/github-actions-key ]; then
-            ssh-keygen -t rsa -b 4096 -C "github-actions" -N "" -f ~/.ssh/github-actions-key
-            echo "✅ SSH Key generated!"
-          else
-            echo "✅ SSH Key already exists!"
-          fi
-          PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
-          gcloud compute project-info add-metadata \
-            --metadata=ssh-keys="${{ secrets.COMPUTE_ENGINE_USER }}:$PUBLIC_KEY"
-          echo "✅ SSH Key added to project metadata!"
-
-      # ✅ Stop VM before setting the new service account
-      - name: Stop Compute Engine Instance Before Updating Service Account
-        run: |
-          echo "🚀 Stopping airflow-server..."
-          gcloud compute instances stop airflow-server --zone us-central1-a
-          echo "✅ Compute Engine instance stopped."
-
-      # ✅ Now update the VM's service account safely
-      - name: Update Compute Engine VM Access Scopes
-        run: |
-          echo "🚀 Updating VM service account and access scopes..."
-          gcloud compute instances set-service-account airflow-server \
-            --zone us-central1-a \
-            --service-account cloudcomputefordocker@primordial-veld-450618-n4.iam.gserviceaccount.com \
-            --scopes cloud-platform
-          echo "✅ VM access scopes updated successfully!"
-
-      # ✅ Restart the instance after updating the service account
-      - name: Restart Compute Engine Instance
-        run: |
-          echo "🚀 Restarting airflow-server..."
-          gcloud compute instances start airflow-server --zone us-central1-a
-          echo "✅ Compute Engine instance restarted successfully!"
-
-      # ✅ Ensure SSH access is available before proceeding
-      - name: Wait for SSH to be Ready
-        run: |
-          echo "🚀 Waiting for airflow-server to be reachable..."
-          EXTERNAL_IP=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
-
-          echo "🌍 Checking SSH access on $EXTERNAL_IP..."
-          for i in {1..10}; do
-            nc -zv -w5 $EXTERNAL_IP 22 && break
-            echo "⏳ SSH not available yet. Retrying in 10 seconds..."
-            sleep 10
-          done
-          echo "✅ SSH is now available!"
-
-
-
       # ✅ Deploy to Compute Engine (Since airflow-server already exists)
       - name: Deploy to Compute Engine
         if: ${{ github.event_name == 'push' || inputs.deployment_target == 'compute_engine' || inputs.deployment_target == 'both' }}
@@ -180,14 +125,11 @@ jobs:
             echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' | jq . > /opt/airflow/gcp-key.json
             chmod 644 /opt/airflow/gcp-key.json
             sudo chown ubuntu:docker /opt/airflow/gcp-key.json
-
             echo "✅ GCP Key File Created."
             echo "🚀 Fixing Airflow log directory permissions..."
-            
             sudo mkdir -p /opt/airflow/logs
             sudo chmod -R 777 /opt/airflow/logs
             sudo chown -R $USER:$USER /opt/airflow/logs
-            
             echo "✅ Log directory permissions fixed."
             echo "✅ Airflow successfully started!"
           EOF
