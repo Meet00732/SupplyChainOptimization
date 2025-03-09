@@ -97,6 +97,23 @@ jobs:
           rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
           echo "✅ Files synced successfully."
 
+      - name: Update Compute Engine VM Access Scopes
+        run: |
+          echo "🚀 Stopping airflow-server..."
+          gcloud compute instances stop airflow-server --zone us-central1-a
+
+          echo "🚀 Updating VM service account and access scopes..."
+          gcloud compute instances set-service-account airflow-server \
+            --zone us-central1-a \
+            --service-account cloudcomputefordocker@primordial-veld-450618-n4.iam.gserviceaccount.com \
+            --scopes cloud-platform
+
+          echo "🚀 Restarting airflow-server..."
+          gcloud compute instances start airflow-server --zone us-central1-a
+
+          echo "✅ VM access scopes updated successfully!"
+
+
       - name: Deploy Airflow on Compute Engine
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
