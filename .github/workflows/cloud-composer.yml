@@ -130,6 +130,7 @@ jobs:
             sudo mkdir -p /opt/airflow/logs
             sudo chmod -R 777 /opt/airflow/logs
             sudo chown -R $USER:$USER /opt/airflow/logs
+            sudo chmod 666 /var/run/docker.sock
             echo "✅ Log directory permissions fixed."
             echo "✅ Airflow successfully started!"
           EOF
