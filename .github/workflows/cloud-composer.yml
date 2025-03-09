@@ -136,7 +136,7 @@ jobs:
             fi
 
             echo "🚀 Creating GCP Key File..."
-            echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" | sed 's/\\n/\n/g' | tr -d '\r' > /opt/airflow/gcp-key.json
+            printf "%b" "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" > /opt/airflow/gcp-key.json
             chmod 644 /opt/airflow/gcp-key.json
             sudo chown ubuntu:docker /opt/airflow/gcp-key.json
             echo "✅ GCP Key File Created."
