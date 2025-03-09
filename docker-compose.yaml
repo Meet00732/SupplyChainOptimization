@@ -50,7 +50,8 @@ services:
     networks:
       - default
     depends_on:
-      - airflow-webserver
+      airflow-webserver:
+        condition: service_healthy
 
   postgres:
     image: postgres:15
@@ -117,7 +118,8 @@ services:
     restart: always
     volumes: *airflow-common-volumes
     depends_on:
-      - airflow-webserver
+      airflow-webserver:
+        condition: service_healthy
 
   airflow-worker:
     <<: *airflow-common
