@@ -125,6 +125,7 @@ jobs:
           sudo mkdir -p /opt/airflow
           sudo chown -R $USER:$USER /opt/airflow
           sudo chmod -R 775 /opt/airflow
+          sudo chmod 666 /var/run/docker.sock
           EOF
 
           rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
