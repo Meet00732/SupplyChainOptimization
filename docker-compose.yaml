@@ -26,8 +26,7 @@ x-airflow-common:
     - ./Data_Pipeline/scripts:/app/scripts
     # - ./secret/gcp-key.json:/opt/airflow/gcp-key.json
     - /var/run/docker.sock:/var/run/docker.sock
-    - ./gcp-key.json:/opt/airflow/gcp-key.json:ro
-
+    - ./gcp-key.json:/opt/airflow/gcp-key.json:ro 
   user: "${AIRFLOW_UID:-50000}:${DOCKER_GID:-0}"
   group_add:
     - "${DOCKER_GID:-0}"
@@ -101,7 +100,7 @@ services:
       AIRFLOW__WEBSERVER__WORKER_TIMEOUT: 300
       AIRFLOW__WEBSERVER__WORKERS: 2
       AIRFLOW__WEBSERVER__INSTANCE_NAME: airflow-webserver
-      AIRFLOW__WEBSERVER__BASE_URL: "http://0.0.0.0:8080"
+      # AIRFLOW__WEBSERVER__BASE_URL: "http://0.0.0.0:8080"
     depends_on:
       airflow-init:
         condition: service_completed_successfully
@@ -137,13 +136,10 @@ services:
     entrypoint: /bin/bash
     command: >
       -c "
-      mkdir -p /opt/airflow/logs &&
-      chmod -R 777 /opt/airflow/logs &&
-      chmod -R 777 /opt/airflow/logs || echo '⚠️ Unable to change permissions, continuing...'
       airflow db migrate &&
       airflow users create --username ${AIRFLOW_ADMIN_USERNAME:-admin} --password ${AIRFLOW_ADMIN_PASSWORD:-admin} --firstname ${AIRFLOW_ADMIN_FIRSTNAME:-Anonymous} --lastname ${AIRFLOW_ADMIN_LASTNAME:-Admin} --role Admin --email ${AIRFLOW_ADMIN_EMAIL:-admin@example.com} &&
       airflow connections delete google_cloud_default || true &&
-      airflow connections add 'google_cloud_default' --conn-type 'google_cloud_platform' --conn-extra '{\"extra__google_cloud_platform__key_path\": \"/opt/airflow/gcp-key.json\"}' || echo '⚠️ Connection already exists, skipping...'
+      airflow connections add 'google_cloud_default' --conn-type 'google_cloud_platform' --conn-extra '{\"extra__google_cloud_platform__key_path\": \"/opt/airflow/gcp-key.json\"}'
       "
     environment:
       <<: *airflow-common-env
