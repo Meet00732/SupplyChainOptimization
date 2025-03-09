@@ -26,7 +26,7 @@ x-airflow-common:
     - ./Data_Pipeline/scripts:/app/scripts
     # - ./secret/gcp-key.json:/opt/airflow/gcp-key.json
     - /var/run/docker.sock:/var/run/docker.sock
-    # - ./gcp-key.json:/opt/airflow/gcp-key.json:ro
+    - ./gcp-key.json:/opt/airflow/gcp-key.json:ro
 
   user: "${AIRFLOW_UID:-50000}:${DOCKER_GID:-0}"
   group_add:
