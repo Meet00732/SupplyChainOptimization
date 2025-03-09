@@ -33,16 +33,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r Data_Pipeline/requirements-test.txt
-
       - name: Set PYTHONPATH
         run: |
           echo "PYTHONPATH=$(pwd)/Data_Pipeline:$(pwd)" >> $GITHUB_ENV
           echo "PYTHONPATH set to $(pwd)/Data_Pipeline:$(pwd)"
-
       - name: Run Unit Tests
         run: |
           python -m unittest discover -s Data_Pipeline/tests -p "test*.py"
-
       - name: Authenticate with Google Cloud
         uses: google-github-actions/auth@v1
         with:
@@ -60,22 +57,19 @@ jobs:
           gcloud compute instances set-service-account airflow-server \
             --zone us-central1-a \
             --service-account cloudcomputefordocker@primordial-veld-450618-n4.iam.gserviceaccount.com \
-            --scopes "https://www.googleapis.com/auth/cloud-platform"
-
-          echo "⏳ Waiting for permission changes to take effect (30s)..."
-          sleep 30
+            --scopes cloud-platform
 
           echo "🚀 Restarting airflow-server..."
           gcloud compute instances start airflow-server --zone us-central1-a
 
           echo "✅ VM access scopes updated successfully!"
 
-      # ✅ Ensure SSH Access after VM Restart
+      # ✅ **Ensure SSH Access after VM Restart**
       - name: Wait for SSH to be Ready
         run: |
           echo "🚀 Waiting for airflow-server to be reachable..."
           EXTERNAL_IP=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
-          
+
           echo "🌍 Checking SSH access on $EXTERNAL_IP..."
           for i in {1..10}; do
             nc -zv -w5 $EXTERNAL_IP 22 && break
@@ -89,7 +83,6 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.deployment_target == 'compute_engine' || inputs.deployment_target == 'both' }}
         run: |
           echo "🚀 Connecting to airflow-server instance..."
-
           # ✅ Ensure SSH Key Exists
           if [ ! -f ~/.ssh/github-actions-key ]; then
             ssh-keygen -t rsa -b 4096 -C "github-actions" -N "" -f ~/.ssh/github-actions-key
@@ -97,7 +90,6 @@ jobs:
           else
             echo "✅ SSH Key already exists!"
           fi
-
           # ✅ Ensure SSH Key is Added to Compute Engine
           PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
           EXISTING_KEYS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(metadata.ssh-keys)" || echo "")
@@ -107,7 +99,6 @@ jobs:
           else
             echo "✅ SSH Key already exists in Compute Engine!"
           fi
-
           # ✅ Ensure Compute Engine is Running
           INSTANCE_STATUS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(status)" || echo "STOPPED")
           if [[ "$INSTANCE_STATUS" != "RUNNING" ]]; then
@@ -117,25 +108,16 @@ jobs:
           else
             echo "✅ Compute Engine is already running."
           fi
-
       - name: Sync Airflow Project Files to Compute Engine
         run: |
           echo "🚀 Syncing project files to airflow-server..."
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} "echo SSH connection successful"
-
-          # ✅ Perform Rsync after confirming SSH works
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . \
-            ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
-
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
           sudo mkdir -p /opt/airflow
           sudo chown -R $USER:$USER /opt/airflow
           sudo chmod -R 775 /opt/airflow
-          sudo chmod 666 /var/run/docker.sock
           EOF
-
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
           echo "✅ Files synced successfully."
-
-
       - name: Deploy Airflow on Compute Engine
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
@@ -147,7 +129,6 @@ jobs:
             else
               echo "✅ Docker is already installed."
             fi
-
             echo "🚀 Ensuring Docker Compose is installed..."
             if ! command -v docker-compose &> /dev/null; then
               echo "❌ Docker Compose not found. Installing latest version..."
@@ -158,43 +139,34 @@ jobs:
             else
               echo "✅ Docker Compose is already installed."
             fi
-
             # ✅ Ensure user has permission to run Docker
             echo "🔄 Adding user to Docker group..."
             sudo usermod -aG docker $USER
             newgrp docker
             sudo systemctl restart docker
-
             mkdir -p /opt/airflow
             echo "airflow dir created."
-
             echo "🚀 Ensuring GCP Key File exists..."
             if [ -d /opt/airflow/gcp-key.json ]; then
                 echo "⚠️ Found directory at /opt/airflow/gcp-key.json. Removing it..."
                 sudo rm -rf /opt/airflow/gcp-key.json
             fi
-
             echo "🚀 Creating GCP Key File..."
             echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' | jq . > /opt/airflow/gcp-key.json
             chmod 644 /opt/airflow/gcp-key.json
             sudo chown ubuntu:docker /opt/airflow/gcp-key.json
             echo "✅ GCP Key File Created."
-
-
             echo "🚀 Fixing Airflow log directory permissions..."
             sudo mkdir -p /opt/airflow/logs
             sudo chmod -R 777 /opt/airflow/logs
             sudo chown -R $USER:$USER /opt/airflow/logs
             echo "✅ Log directory permissions fixed."
-
             echo "✅ Airflow successfully started!"
           EOF
-
       - name: Get Airflow Webserver IP
         run: |
           EXTERNAL_IP=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
           echo "🌍 Airflow UI is available at: http://$EXTERNAL_IP:8080"
-
       # ✅ Deploy to Cloud Composer Only if Selected
       - name: Deploy DAGs to Cloud Composer
         if: ${{ inputs.deployment_target == 'cloud_composer' || inputs.deployment_target == 'both' }}
@@ -202,7 +174,6 @@ jobs:
           echo "🚀 Uploading DAGs to Cloud Composer..."
           gcloud storage cp -r Data_Pipeline/dags gs://your-cloud-composer-bucket/dags
           echo "✅ DAGs uploaded successfully!"
-
       # ✅ Remove SSH Key after deployment (Security)
       - name: Remove SSH Key
         run: rm -f ~/.ssh/github-actions-key ~/.ssh/github-actions-key.pub
