@@ -99,7 +99,7 @@ jobs:
             else
               echo "✅ Docker is already installed."
             fi
-            echo "🚀 Ensuring Docker Compose is installed..."
+
             if ! command -v docker-compose &> /dev/null; then
               echo "❌ Docker Compose not found. Installing latest version..."
               DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep -Po '"tag_name": "\K.*?(?=")')
@@ -109,11 +109,18 @@ jobs:
             else
               echo "✅ Docker Compose is already installed."
             fi
-            # ✅ Ensure user has permission to run Docker
+
+            # ✅ Ensure the user has permission to run Docker
             echo "🔄 Adding user to Docker group..."
             sudo usermod -aG docker $USER
             newgrp docker
             sudo systemctl restart docker
+            echo "✅ User added to Docker group and Docker restarted."
+
+            # ✅ Set correct permissions for Docker socket
+            sudo chmod 666 /var/run/docker.sock
+            echo "✅ Docker socket permissions fixed."
+
             mkdir -p /opt/airflow
             echo "airflow dir created."
             echo "🚀 Ensuring GCP Key File exists..."
@@ -130,7 +137,7 @@ jobs:
             sudo mkdir -p /opt/airflow/logs
             sudo chmod -R 777 /opt/airflow/logs
             sudo chown -R $USER:$USER /opt/airflow/logs
-            sudo chmod 666 /var/run/docker.sock
+            # ✅ Ensure the user can access Docker without root privileges
             echo "✅ Log directory permissions fixed."
             echo "✅ Airflow successfully started!"
           EOF
