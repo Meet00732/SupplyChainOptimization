@@ -45,7 +45,7 @@ services:
     container_name: data-pipeline-container
     volumes:
       - ./Data_Pipeline/scripts:/app/scripts
-      - ./secret:/app/secret
+      - /opt/airflow/gcp-key.json:/opt/airflow/gcp-key.json:ro
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /app/secret/gcp-key.json
     working_dir: /app/scripts
