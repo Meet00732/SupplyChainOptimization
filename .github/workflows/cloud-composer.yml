@@ -65,11 +65,13 @@ jobs:
           echo "✅ VM access scopes updated successfully!"
 
       # ✅ **Ensure SSH Access after VM Restart**
-      - name: Wait for SSH to be Ready
+      - name: Sync Airflow Project Files to Compute Engine
         run: |
-          echo "🚀 Waiting for airflow-server to be reachable..."
+          echo "🚀 Syncing project files to airflow-server..."
+          
+          # Ensure SSH is accessible
           EXTERNAL_IP=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
-
+          
           echo "🌍 Checking SSH access on $EXTERNAL_IP..."
           for i in {1..10}; do
             nc -zv -w5 $EXTERNAL_IP 22 && break
@@ -77,6 +79,17 @@ jobs:
             sleep 10
           done
           echo "✅ SSH is now available!"
+
+          # Ensure SSH connectivity is working
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/github-actions-key \
+            ${{ secrets.COMPUTE_ENGINE_USER }}@${EXTERNAL_IP} "echo '✅ SSH connection successful'"
+
+          # Sync project files
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/github-actions-key" \
+            --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${EXTERNAL_IP}:/opt/airflow
+
+          echo "✅ Files synced successfully."
+
 
       # ✅ Deploy to Compute Engine (Since airflow-server already exists)
       - name: Deploy to Compute Engine
