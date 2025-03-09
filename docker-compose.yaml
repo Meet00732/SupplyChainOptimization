@@ -126,13 +126,21 @@ services:
       test:
         - "CMD-SHELL"
         - 'celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
-      interval: 10s
-      timeout: 10s
+      interval: 30s
+      timeout: 60s
       retries: 5
     restart: always
     volumes: *airflow-common-volumes
+    airflow-worker:
+    <<: *airflow-common
+    command: celery worker
     depends_on:
-      - airflow-scheduler
+      airflow-scheduler:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   airflow-init:
     <<: *airflow-common
