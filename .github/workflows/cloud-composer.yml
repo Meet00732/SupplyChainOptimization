@@ -63,7 +63,14 @@ jobs:
             --metadata=ssh-keys="${{ secrets.COMPUTE_ENGINE_USER }}:$PUBLIC_KEY"
           echo "✅ SSH Key added to project metadata!"
 
-      # ✅ **Update VM Service Account and Access Scopes Without Restart**
+      # ✅ Stop VM before setting the new service account
+      - name: Stop Compute Engine Instance Before Updating Service Account
+        run: |
+          echo "🚀 Stopping airflow-server..."
+          gcloud compute instances stop airflow-server --zone us-central1-a
+          echo "✅ Compute Engine instance stopped."
+
+      # ✅ Now update the VM's service account safely
       - name: Update Compute Engine VM Access Scopes
         run: |
           echo "🚀 Updating VM service account and access scopes..."
@@ -73,19 +80,27 @@ jobs:
             --scopes cloud-platform
           echo "✅ VM access scopes updated successfully!"
 
-      # ✅ **Ensure SSH Access Before Proceeding**
-      - name: Ensure SSH Access to Compute Engine
+      # ✅ Restart the instance after updating the service account
+      - name: Restart Compute Engine Instance
         run: |
-          echo "🚀 Ensuring SSH access to airflow-server..."
+          echo "🚀 Restarting airflow-server..."
+          gcloud compute instances start airflow-server --zone us-central1-a
+          echo "✅ Compute Engine instance restarted successfully!"
+
+      # ✅ Ensure SSH access is available before proceeding
+      - name: Wait for SSH to be Ready
+        run: |
+          echo "🚀 Waiting for airflow-server to be reachable..."
           EXTERNAL_IP=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
 
           echo "🌍 Checking SSH access on $EXTERNAL_IP..."
           for i in {1..10}; do
             nc -zv -w5 $EXTERNAL_IP 22 && break
             echo "⏳ SSH not available yet. Retrying in 10 seconds..."
-            sleep 30
+            sleep 10
           done
           echo "✅ SSH is now available!"
+
 
 
       # ✅ Deploy to Compute Engine (Since airflow-server already exists)
