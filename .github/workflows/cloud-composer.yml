@@ -88,7 +88,7 @@ jobs:
       - name: Sync Airflow Project Files to Compute Engine
         run: |
           echo "🚀 Syncing project files to airflow-server..."
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:~/airflow
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
           echo "✅ Files synced successfully."
 
       - name: Deploy Airflow on Compute Engine
@@ -120,7 +120,7 @@ jobs:
             newgrp docker
             sudo systemctl restart docker
 
-            mkdir -p ~/airflow
+            mkdir -p /opt/airflow
             echo "airflow dir created."
 
             echo "🚀 Ensuring GCP Key File exists..."
