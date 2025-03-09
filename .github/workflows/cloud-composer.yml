@@ -146,6 +146,9 @@ jobs:
             docker compose down
             docker compose up -d
 
+            # Capture logs to debug if there is an issue
+            docker-compose logs -f
+
             echo "✅ Airflow successfully started!"
           EOF
 

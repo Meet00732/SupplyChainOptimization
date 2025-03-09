@@ -92,7 +92,7 @@ services:
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 30s
-      timeout: 30s
+      timeout: 60s
       retries: 5
       start_period: 30s
     restart: always
@@ -112,8 +112,8 @@ services:
     command: scheduler
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
-      interval: 10s
-      timeout: 10s
+      interval: 30s
+      timeout: 60s
       retries: 5
     restart: always
     volumes: *airflow-common-volumes
@@ -125,8 +125,8 @@ services:
       test:
         - "CMD-SHELL"
         - 'celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
-      interval: 10s
-      timeout: 10s
+      interval: 30s
+      timeout: 60s
       retries: 5
     restart: always
     volumes: *airflow-common-volumes
@@ -166,8 +166,8 @@ services:
       - 5555:5555
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
-      interval: 10s
-      timeout: 10s
+      interval: 30s
+      timeout: 60s
       retries: 5
     restart: always
 
