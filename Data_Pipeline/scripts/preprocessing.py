@@ -67,7 +67,13 @@ def convert_feature_types(df: pl.DataFrame) -> pl.DataFrame:
     try:
         for col, dtype in expected_dtypes.items():
             if col in df.columns:
-                df = df.with_columns(pl.col(col).cast(dtype))
+                # For Quantity, first convert to float and round to integer
+                if col == "Quantity":
+                    df = df.with_columns(
+                        pl.col(col).cast(pl.Float64).round(0).cast(pl.Int64)
+                    )
+                else:
+                    df = df.with_columns(pl.col(col).cast(dtype))
         logger.info("Feature types converted successfully.")
         return df
     except Exception as e:
@@ -742,11 +748,19 @@ def process_file(
     source_bucket_name: str,
     blob_name: str,
     destination_bucket_name: str,
+    cache_bucket_name: str = None,
     delete_after_processing: bool = True,
 ) -> None:
     """
     Processes a single file through the entire data cleaning pipeline and uploads
     the result to GCS. Optionally deletes the source file after processing.
+
+    Parameters:
+        source_bucket_name (str): GCS bucket containing raw data.
+        blob_name (str): Name of the blob/file to process.
+        destination_bucket_name (str): Primary GCS bucket to store processed data.
+        cache_bucket_name (str, optional): Secondary GCS bucket to cache processed data. If None, no caching is done.
+        delete_after_processing (bool): Whether to delete source files after processing.
     """
     try:
         logger.info(f"Loading data from GCS: {blob_name}")
@@ -820,17 +834,29 @@ def process_file(
         logger.info("Performing Feature Engineering on Aggregated Data...")
         df = extracting_time_series_and_lagged_features(df)
 
-        # Generate a unique name for the output file
+        # Generate a consistent name for the output file (without timestamp)
+        # This ensures we overwrite the existing file instead of creating a new one
         base_name = os.path.splitext(os.path.basename(blob_name))[0]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_dest_name = f"processed_{base_name}_{timestamp}.csv"
+        dest_name = f"processed_{base_name}.csv"
 
-        logger.info(f"Uploading cleaned data to GCS → {unique_dest_name}")
-        upload_to_gcs(df, destination_bucket_name, unique_dest_name)
+        logger.info(
+            f"Uploading cleaned data to GCS → {dest_name} (will overwrite if exists)"
+        )
+        upload_to_gcs(df, destination_bucket_name, dest_name)
         logger.info(
             f"Data cleaning completed! Cleaned data saved to GCS bucket: {destination_bucket_name}, "
-            f"blob: {unique_dest_name}"
+            f"blob: {dest_name}"
         )
+
+        # If cache bucket is provided, also upload to the cache bucket
+        if cache_bucket_name:
+            logger.info(
+                f"Also uploading cleaned data to cache bucket: {cache_bucket_name}"
+            )
+            upload_to_gcs(df, cache_bucket_name, dest_name)
+            logger.info(
+                f"Data cached in bucket: {cache_bucket_name}, blob: {dest_name}"
+            )
 
         if delete_after_processing:
             logger.info(
@@ -845,8 +871,9 @@ def process_file(
                 logger.warning(f"Failed to delete source file: {blob_name}")
 
         logger.info("Performing Post Validation...")
-        unique_dest_blob_name = f"stats_{base_name}_{timestamp}.json"
-        validation_passed = post_validation(df, unique_dest_blob_name)
+        # Also use a consistent name for statistics files
+        stats_blob_name = f"stats_{base_name}.json"
+        validation_passed = post_validation(df, stats_blob_name)
 
         if validation_passed:
             logger.info("Post-validation passed successfully.")
@@ -865,6 +892,7 @@ def process_file(
 def main(
     source_bucket_name: str = "full-raw-data",
     destination_bucket_name: str = "fully-processed-data",
+    cache_bucket_name: str = None,
     delete_after_processing: bool = True,
 ) -> None:
     """
@@ -874,6 +902,7 @@ def main(
     Parameters:
         source_bucket_name (str): GCS bucket containing raw data.
         destination_bucket_name (str): GCS bucket to store processed data.
+        cache_bucket_name (str, optional): Secondary GCS bucket to cache processed data. If None, no caching is done.
         delete_after_processing (bool): Whether to delete source files after processing.
     """
     try:
@@ -889,6 +918,7 @@ def main(
                 source_bucket_name=source_bucket_name,
                 blob_name=blob_name,
                 destination_bucket_name=destination_bucket_name,
+                cache_bucket_name=cache_bucket_name,
                 delete_after_processing=delete_after_processing,
             )
 
@@ -913,6 +943,12 @@ if __name__ == "__main__":
         help="GCP bucket name for processed files",
     )
     parser.add_argument(
+        "--cache_bucket",
+        type=str,
+        default=None,
+        help="GCP bucket name for caching processed data",
+    )
+    parser.add_argument(
         "--delete_after",
         action="store_true",
         default=True,
@@ -924,5 +960,6 @@ if __name__ == "__main__":
     main(
         source_bucket_name=args.source_bucket,
         destination_bucket_name=args.destination_bucket,
+        cache_bucket_name=args.cache_bucket,
         delete_after_processing=args.delete_after,
     )
