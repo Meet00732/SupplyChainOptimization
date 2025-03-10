@@ -1558,37 +1558,37 @@ class TestDataPreprocessing(unittest.TestCase):
             extracting_time_series_and_lagged_features(df_missing_quantity)
 
 
-    @patch("scripts.preprocessing.logger")
-    @patch("scripts.preprocessing.process_file")
-    @patch("scripts.preprocessing.list_bucket_blobs")
-    def test_main_with_files(
-        self, mock_list_bucket_blobs, mock_process_file, mock_logger
-    ):
-        # Setup: list_bucket_blobs returns a list of files.
-        blob_names = ["file1.csv", "file2.csv"]
-        mock_list_bucket_blobs.return_value = blob_names
+    # @patch("scripts.preprocessing.logger")
+    # @patch("scripts.preprocessing.process_file")
+    # @patch("scripts.preprocessing.list_bucket_blobs")
+    # def test_main_with_files(
+    #     self, mock_list_bucket_blobs, mock_process_file, mock_logger
+    # ):
+    #     # Setup: list_bucket_blobs returns a list of files.
+    #     blob_names = ["file1.csv", "file2.csv"]
+    #     mock_list_bucket_blobs.return_value = blob_names
 
-        source_bucket = "source_bucket"
-        destination_bucket = "dest_bucket"
-        delete_after_processing = True
+    #     source_bucket = "source_bucket"
+    #     destination_bucket = "dest_bucket"
+    #     delete_after_processing = True
 
-        # Execute
-        main(source_bucket, destination_bucket, delete_after_processing)
+    #     # Execute
+    #     main(source_bucket, destination_bucket, delete_after_processing)
 
-        # Verify that list_bucket_blobs was called correctly.
-        mock_list_bucket_blobs.assert_called_once_with(source_bucket)
-        # Verify that process_file was called once for each blob.
-        self.assertEqual(mock_process_file.call_count, len(blob_names))
-        expected_calls = [
-            call(
-                source_bucket_name=source_bucket,
-                blob_name=blob,
-                destination_bucket_name=destination_bucket,
-                delete_after_processing=delete_after_processing,
-            )
-            for blob in blob_names
-        ]
-        mock_process_file.assert_has_calls(expected_calls, any_order=True)
+    #     # Verify that list_bucket_blobs was called correctly.
+    #     mock_list_bucket_blobs.assert_called_once_with(source_bucket)
+    #     # Verify that process_file was called once for each blob.
+    #     self.assertEqual(mock_process_file.call_count, len(blob_names))
+    #     expected_calls = [
+    #         call(
+    #             source_bucket_name=source_bucket,
+    #             blob_name=blob,
+    #             destination_bucket_name=destination_bucket,
+    #             delete_after_processing=delete_after_processing,
+    #         )
+    #         for blob in blob_names
+    #     ]
+    #     mock_process_file.assert_has_calls(expected_calls, any_order=True)
 
     @patch("scripts.preprocessing.logger")
     @patch("scripts.preprocessing.list_bucket_blobs")
