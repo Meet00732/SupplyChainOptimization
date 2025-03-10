@@ -14,6 +14,8 @@
     1. Allow HTTP Traffic
     2. Allow HTTPS Traffic
 
+## Note: Everytime VM is restarted it will change External IP.
+
 
 ### Firewall configuration
 
@@ -25,3 +27,10 @@ Create
 ### Attaching tag to VM
 
 1. attach firewall tag to vm by editing vm and attach usings tags.
+
+
+### CMD to run in SSH shell
+
+1. sudo usermod -aG docker $USER
+2. newgrp docker
+
