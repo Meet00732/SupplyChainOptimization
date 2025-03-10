@@ -2,7 +2,7 @@ name: Deploy to Compute Engine
 
 on:
   push:
-    branches: Testing-pipeline-multiple-user
+    branches: testing-deployment-dvc
   workflow_dispatch:
     inputs:
       deployment_target:
