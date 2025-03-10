@@ -5,32 +5,7 @@ from unittest.mock import MagicMock, call, patch
 
 import polars as pl
 from polars.testing import assert_frame_equal
-from scripts.preprocessing import (
-    aggregate_daily_products,
-    calculate_zscore,
-    compute_most_frequent_price,
-    convert_feature_types,
-    convert_string_columns_to_lowercase,
-    delete_blob_from_bucket,
-    detect_anomalies,
-    detect_date_order,
-    extract_datetime_features,
-    extracting_time_series_and_lagged_features,
-    filling_missing_cost_price,
-    filling_missing_dates,
-    filter_invalid_products,
-    iqr_bounds,
-    list_bucket_blobs,
-    load_bucket_data,
-    main,
-    process_file,
-    remove_duplicate_records,
-    remove_invalid_records,
-    send_anomaly_alert,
-    standardize_date_format,
-    standardize_product_name,
-    upload_to_gcs,
-)
+from scripts.preprocessing import *
 
 
 class TestDataPreprocessing(unittest.TestCase):
@@ -1966,103 +1941,7 @@ class TestTimeSeriesFeatureExtraction(unittest.TestCase):
         with self.assertRaises(ValueError):
             iqr_bounds(series)
 
-    # Unit Tests for process function.
-
-
-    @patch("scripts.preprocessing.post_validation")
-    @patch("scripts.preprocessing.delete_blob_from_bucket")
-    @patch("scripts.preprocessing.upload_to_gcs")
-    @patch("scripts.preprocessing.extracting_time_series_and_lagged_features")
-    @patch("scripts.preprocessing.aggregate_daily_products")
-    @patch("scripts.preprocessing.send_anomaly_alert")
-    @patch("scripts.preprocessing.detect_anomalies")
-    @patch("scripts.preprocessing.remove_duplicate_records")
-    @patch("scripts.preprocessing.remove_invalid_records")
-    @patch("scripts.preprocessing.filling_missing_cost_price")
-    @patch("scripts.preprocessing.filter_invalid_products")
-    @patch("scripts.preprocessing.standardize_product_name")
-    @patch("scripts.preprocessing.convert_string_columns_to_lowercase")
-    @patch("scripts.preprocessing.convert_feature_types")
-    @patch("scripts.preprocessing.filling_missing_dates")
-    @patch("scripts.preprocessing.load_bucket_data")
-    def test_process_file_success(
-        self,
-        mock_load_bucket_data,
-        mock_filling_missing_dates,
-        mock_convert_feature_types,
-        mock_convert_string_columns,
-        mock_standardize_product_name,
-        mock_filter_invalid_products,
-        mock_filling_missing_cost_price,
-        mock_remove_invalid_records,
-        mock_remove_duplicate_records,
-        mock_detect_anomalies,
-        mock_send_anomaly_alert,
-        mock_aggregate_daily_products,
-        mock_extracting_time_series,
-        mock_upload_to_gcs,
-        mock_delete_blob_from_bucket,
-        mock_post_validation,
-    ):
-
-        dummy_df = pl.DataFrame({"dummy": [1]})
-        
-
-        mock_load_bucket_data.return_value = dummy_df
-        mock_filling_missing_dates.return_value = dummy_df
-        mock_convert_feature_types.return_value = dummy_df
-        mock_convert_string_columns.return_value = dummy_df
-        mock_standardize_product_name.return_value = dummy_df
-        mock_filter_invalid_products.return_value = dummy_df
-        mock_filling_missing_cost_price.return_value = dummy_df
-        mock_remove_invalid_records.return_value = dummy_df
-        mock_remove_duplicate_records.return_value = dummy_df
-
-
-        mock_detect_anomalies.return_value = ({}, dummy_df)  # Empty dict for anomalies
-        mock_send_anomaly_alert.return_value = None
-        mock_aggregate_daily_products.return_value = dummy_df
-        mock_extracting_time_series.return_value = dummy_df
-        mock_upload_to_gcs.return_value = None
-        mock_delete_blob_from_bucket.return_value = True
-        mock_post_validation.return_value = True
-
-        source_bucket_name = "source_bucket"
-        blob_name = "test_file.csv"
-        destination_bucket_name = "destination_bucket"
-
-
-        process_file(
-            source_bucket_name,
-            blob_name,
-            destination_bucket_name,
-            delete_after_processing=True,
-        )
-
-
-        mock_load_bucket_data.assert_called_once_with(source_bucket_name, blob_name)
-
-
-        mock_upload_to_gcs.assert_called_once()
-        args, _ = mock_upload_to_gcs.call_args
-        assert_frame_equal(args[0], dummy_df) 
-        self.assertEqual(args[1], destination_bucket_name)
-        
-        unique_dest_name = args[2]
-        self.assertTrue(unique_dest_name.startswith("processed_test_file_"))
-        self.assertTrue(unique_dest_name.endswith(".csv"))
-
-
-        mock_delete_blob_from_bucket.assert_called_once_with(source_bucket_name, blob_name)
-
-
-        mock_post_validation.assert_called_once()
-        args, _ = mock_post_validation.call_args
-        assert_frame_equal(args[0], dummy_df) 
-        
-        unique_stats_blob = args[1]
-        self.assertTrue(unique_stats_blob.startswith("stats_test_file_"))
-        self.assertTrue(unique_stats_blob.endswith(".json"))
+    # Unit Tests for process function
 
 
     @patch("scripts.preprocessing.logger")

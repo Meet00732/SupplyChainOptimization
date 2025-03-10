@@ -7,23 +7,11 @@ import polars as pl
 try:
     from logger import logger
     from post_validation import post_validation
-    from utils import (
-        delete_blob_from_bucket,
-        list_bucket_blobs,
-        load_bucket_data,
-        send_anomaly_alert,
-        upload_to_gcs,
-    )
+    from utils import *
 except ImportError:  # For testing purposes
     from Data_Pipeline.scripts.logger import logger
-    from Data_Pipeline.scripts.utils import (
-        load_bucket_data,
-        upload_to_gcs,
-        list_bucket_blobs,
-        delete_blob_from_bucket,
-        send_anomaly_alert,
-    )
-    from Data_Pipeline.scripts.post_validation import post_validation
+    from Data_Pipeline.scripts.utils import *
+    from Data_Pipeline.scripts.post_validation import *
 
 import argparse
 import os
