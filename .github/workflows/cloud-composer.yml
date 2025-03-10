@@ -2,7 +2,7 @@ name: Deploy to Compute Engine & Cloud Composer
 
 on:
   push:
-    branches: testing-pipeline
+    branches: testing-pipeline-multiple-user
   workflow_dispatch:
     inputs:
       deployment_target:
@@ -48,6 +48,14 @@ jobs:
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
+
+      - name: Determine Compute Engine User
+        run: |
+          COMPUTE_ENGINE_USER=$(gcloud config get-value account 2>/dev/null || echo "ubuntu")
+          echo "COMPUTE_ENGINE_USER=${COMPUTE_ENGINE_USER}" >> $GITHUB_ENV
+          echo "✅ COMPUTE_ENGINE_USER set to ${COMPUTE_ENGINE_USER}"
+
+
       # ✅ Deploy to Compute Engine (Since airflow-server already exists)
       - name: Deploy to Compute Engine
         if: ${{ github.event_name == 'push' || inputs.deployment_target == 'compute_engine' || inputs.deployment_target == 'both' }}
@@ -64,7 +72,7 @@ jobs:
           PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
           EXISTING_KEYS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(metadata.ssh-keys)" || echo "")
           if [[ "$EXISTING_KEYS" != *"$PUBLIC_KEY"* ]]; then
-            gcloud compute instances add-metadata airflow-server --zone us-central1-a --metadata=ssh-keys="${{ secrets.COMPUTE_ENGINE_USER }}:$PUBLIC_KEY"
+            gcloud compute instances add-metadata airflow-server --zone us-central1-a --metadata=ssh-keys="${COMPUTE_ENGINE_USER}:$PUBLIC_KEY"
             echo "✅ SSH Key added to Compute Engine!"
           else
             echo "✅ SSH Key already exists in Compute Engine!"
@@ -81,16 +89,16 @@ jobs:
       - name: Sync Airflow Project Files to Compute Engine
         run: |
           echo "🚀 Syncing project files to airflow-server..."
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${COMPUTE_ENGINE_USER}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
           sudo mkdir -p /opt/airflow
           sudo chown -R $USER:$USER /opt/airflow
           sudo chmod -R 775 /opt/airflow
           EOF
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${COMPUTE_ENGINE_USER}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
           echo "✅ Files synced successfully."
       - name: Deploy Airflow on Compute Engine
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${COMPUTE_ENGINE_USER}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
             echo "🚀 Ensuring Docker is installed..."
             if ! command -v docker &> /dev/null; then
               echo "❌ Docker is not installed. Installing..."
