@@ -89,7 +89,6 @@ jobs:
             BUILD_REQUIRED=true
           fi
 
-
           echo "🔍 Checking if 'Dockerfile' or 'requirements.txt' has changed..."
 
           if [ "$(git rev-list --count HEAD)" -lt 2 ]; then
