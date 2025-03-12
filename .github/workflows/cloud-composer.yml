@@ -66,7 +66,9 @@ jobs:
 
           # 1) Does the image exist in AR?
           #    If it doesn't exist, set build_required=true right away.
-          EXISTING_IMAGE=$(gcloud artifacts docker images list --repository="us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME" \
+          EXISTING_IMAGE=$(gcloud artifacts docker images list --repository="$REPO_NAME" \
+            --location="us-central1" \
+            --project="$PROJECT_ID" \
             --format="value(DISPLAY_NAME)" \
             --filter="DISPLAY_NAME:($IMAGE_NAME:$IMAGE_TAG)")
 
