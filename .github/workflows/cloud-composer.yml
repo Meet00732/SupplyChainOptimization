@@ -86,6 +86,7 @@ jobs:
             echo "⚠️ No exact match for '${IMAGE_NAME}:${IMAGE_TAG}'. A new build is required."
             BUILD_REQUIRED=true
           fi
+          
 
           echo "🔍 Checking if 'Dockerfile' or 'requirements.txt' has changed..."
 
