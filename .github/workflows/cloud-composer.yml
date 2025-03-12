@@ -140,7 +140,7 @@ jobs:
           echo -e "FROM alpine\nCMD [\"echo\", \"Test push successful!\"]" > Dockerfile.test
           
           # Build the test image
-          docker build -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Dockerfile.test .
+          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Dockerfile.test .
           
           # Push the test image to Artifact Registry
           docker push ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG}
