@@ -66,16 +66,13 @@ jobs:
           REPO_NAME="airflow-docker-image"
           IMAGE_NAME="data-pipeline"
           IMAGE_TAG="latest"
+          REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
 
           echo "🔍 Checking if remote image exists in Artifact Registry..."
 
-          # 1) Does the image exist in AR?
-          #    If it doesn't exist, set build_required=true right away.
-          EXISTING_IMAGE=$(gcloud artifacts docker images list --repository="$REPO_NAME" \
-            --location="us-central1" \
-            --project="$PROJECT_ID" \
+          EXISTING_IMAGE=$(gcloud artifacts docker images list ${REPO_URI} \
             --format="value(DISPLAY_NAME)" \
-            --filter="DISPLAY_NAME:($IMAGE_NAME:$IMAGE_TAG)")
+            --filter="DISPLAY_NAME:(${IMAGE_NAME}:${IMAGE_TAG})")
 
           if [[ -z "$EXISTING_IMAGE" ]]; then
             echo "⚠️ Remote image not found in Artifact Registry."
