@@ -94,8 +94,8 @@ jobs:
         if: steps.detect-changes.outputs.build_required == 'true'
         run: |
           echo "🚀 Docker build triggered (image missing or code changed)."
-          PROJECT_ID="YOUR_PROJECT"
-          REPO_NAME="YOUR_REPO"
+          PROJECT_ID="primordial-veld-450618-n4"
+          REPO_NAME="airflow-docker-image"
           IMAGE_NAME="data-pipeline"
           IMAGE_TAG="latest"
 
