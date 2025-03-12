@@ -9,11 +9,14 @@ REPO_FORMAT="docker"
 
 echo "🔍 Checking if Artifact Registry '$REGISTRY_NAME' exists in '$LOCATION'..."
 
-EXISTING_REPO=$(gcloud artifacts repositories list \
-  --project="$PROJECT_ID" \
-  --location="$LOCATION" \
-  --filter="name:/$REGISTRY_NAME$" \
-  --format="value(name)")
+EXISTING_REPO=$(
+  gcloud artifacts repositories list \
+    --project="$PROJECT_ID" \
+    --location="$LOCATION" \
+    --filter="repositoryId=$REGISTRY_NAME" \
+    --format="value(repositoryId)"
+)
+
 
 if [[ -z "$EXISTING_REPO" ]]; then
   echo "❌ Repository '$REGISTRY_NAME' not found. Creating it..."
