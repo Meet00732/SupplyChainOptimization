@@ -2,7 +2,7 @@
 set -e 
 
 # ----------- CONFIGURATION -----------
-VM_NAME="airflow-server"
+VM_NAME="airflow-server-vm"
 VM_ZONE="us-central1-a"
 
 # Example ARM-based machine type in GCP (4 vCPU, 16GB)
