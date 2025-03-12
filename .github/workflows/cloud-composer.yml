@@ -135,7 +135,7 @@ jobs:
           REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
           
           # Build with --no-cache to ensure a fresh build
-          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} Data_Pipeline
+          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Dockerfile.test
 
           # Also tag this as 'latest' for convenience
           docker tag ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} ${REPO_URI}/${IMAGE_NAME}:latest
