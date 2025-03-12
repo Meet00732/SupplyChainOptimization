@@ -134,6 +134,7 @@ jobs:
           IMAGE_TAG=$(date +'%Y%m%d-%H%M%S')  # Unique tag for each build
           REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
 
+
           # Create a minimal Dockerfile for testing
           echo -e "FROM alpine\nCMD [\"echo\", \"Test push successful!\"]" > Dockerfile.test
           
