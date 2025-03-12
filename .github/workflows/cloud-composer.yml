@@ -64,7 +64,7 @@ jobs:
         run: |
           PROJECT_ID="primordial-veld-450618-n4"
           REPO_NAME="airflow-docker-image"
-          IMAGE_NAME="data-pipeline"
+          IMAGE_NAME="test-push-image"
           IMAGE_TAG="latest"
           REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
 
