@@ -13,7 +13,7 @@ EXISTING_REPO=$(
   gcloud artifacts repositories list \
     --project="$PROJECT_ID" \
     --location="$LOCATION" \
-    --filter="repositoryId=$REGISTRY_NAME" \
+    --filter="name~'/repositories/$REGISTRY_NAME$'" \
     --format="value(repositoryId)"
 )
 
