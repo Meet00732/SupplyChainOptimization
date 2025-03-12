@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -86,14 +88,18 @@ jobs:
             echo "⚠️ No exact match for '${IMAGE_NAME}:${IMAGE_TAG}'. A new build is required."
             BUILD_REQUIRED=true
           fi
-          
+
 
           echo "🔍 Checking if 'Dockerfile' or 'requirements.txt' has changed..."
 
-          # Check if Dockerfile or requirements.txt has changed in the last commit
-          if ! git diff --quiet HEAD~1 HEAD -- Data_Pipeline/Dockerfile Data_Pipeline/requirements.txt; then
-            echo "⚠️ Changes detected in 'Dockerfile' or 'requirements.txt'. A new build is required."
+          if [ "$(git rev-list --count HEAD)" -lt 2 ]; then
+            echo "⚠️ Not enough commit history. Assuming changes."
             BUILD_REQUIRED=true
+          else
+            if ! git diff --quiet HEAD~1 HEAD -- Data_Pipeline/Dockerfile Data_Pipeline/requirements.txt; then
+              echo "⚠️ Changes detected in 'Dockerfile' or 'requirements.txt'. A new build is required."
+              BUILD_REQUIRED=true
+            fi
           fi
 
           # Set output based on build requirement
