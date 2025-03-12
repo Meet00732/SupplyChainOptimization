@@ -90,6 +90,10 @@ jobs:
             fi
           fi
 
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
       - name: Build & Push data-pipeline Image
         if: steps.detect-changes.outputs.build_required == 'true'
         run: |
@@ -133,7 +137,7 @@ jobs:
           fi
 
           PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
-          VM_NAME="airflow-server"
+          VM_NAME="airflow-server-vm"
           VM_ZONE="us-central1-a"
 
           # Attach public key to VM metadata if missing
