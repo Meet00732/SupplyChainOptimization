@@ -39,9 +39,10 @@ x-airflow-common:
 
 services:
   data-pipeline:
-    build:
-      context: ./Data_Pipeline
-      dockerfile: Dockerfile
+    # build:
+    #   context: ./Data_Pipeline
+    #   dockerfile: Dockerfile
+    image: us-central1-docker.pkg.dev/primordial-veld-450618-n4/airflow-docker-image/data-pipeline:latest
     platform: linux/amd64
     container_name: data-pipeline-container
     volumes:

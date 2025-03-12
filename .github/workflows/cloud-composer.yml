@@ -2,7 +2,7 @@ name: Deploy to Compute Engine
 
 on:
   push:
-    branches: testing-deployment-dvc
+    branches: testing-deployment-automation
   workflow_dispatch:
     inputs:
       deployment_target:
@@ -47,6 +47,69 @@ jobs:
         uses: google-github-actions/setup-gcloud@v1
 
 
+      - name: Ensure Artifact Registry
+        run: |
+          chmod +x scripts/create_or_ensure_artifact_registry.sh
+          ./scripts/create_or_ensure_artifact_registry.sh
+
+
+      # ---------- CONDITIONAL DOCKER BUILD ----------
+      - name: Check if Docker Build is Needed
+        id: detect-changes
+        run: |
+          PROJECT_ID="primordial-veld-450618-n4"
+          REPO_NAME="airflow-docker-image"
+          IMAGE_NAME="data-pipeline"
+          IMAGE_TAG="latest"
+
+          echo "🔍 Checking if remote image exists in Artifact Registry..."
+
+          # 1) Does the image exist in AR?
+          #    If it doesn't exist, set build_required=true right away.
+          EXISTING_IMAGE=$(gcloud artifacts docker images list --repository="us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME" \
+            --format="value(DISPLAY_NAME)" \
+            --filter="DISPLAY_NAME:($IMAGE_NAME:$IMAGE_TAG)")
+
+          if [[ -z "$EXISTING_IMAGE" ]]; then
+            echo "⚠️ Remote image not found in Artifact Registry."
+            echo "build_required=true" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Remote image found: $EXISTING_IMAGE"
+            echo "🔍 Checking if Dockerfile or requirements changed via git diff..."
+
+            if git diff --quiet HEAD~1 HEAD -- \
+              Data_Pipeline/Dockerfile \
+              Data_Pipeline/requirements.txt; then
+              echo "build_required=false" >> $GITHUB_OUTPUT
+            else
+              echo "build_required=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Build & Push data-pipeline Image
+        if: steps.detect-changes.outputs.build_required == 'true'
+        run: |
+          echo "🚀 Docker build triggered (image missing or code changed)."
+          PROJECT_ID="YOUR_PROJECT"
+          REPO_NAME="YOUR_REPO"
+          IMAGE_NAME="data-pipeline"
+          IMAGE_TAG="latest"
+
+          # Build
+          docker build -t us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$IMAGE_TAG Data_Pipeline
+
+          # Push
+          docker push us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$IMAGE_TAG
+
+
+
+      - name: Ensure Airflow Server VM & Firewall
+        if: ${{ github.event_name == 'push' || inputs.deployment_target == 'compute_engine' || inputs.deployment_target == 'both' }}
+        run: |
+          chmod +x scripts/create_or_start_airflow_server_vm.sh
+          ./scripts/create_or_start_airflow_server_vm.sh
+
+
       - name: Determine Compute Engine User
         run: |
           COMPUTE_ENGINE_USER=$(gcloud config get-value account 2>/dev/null || echo "ubuntu")
@@ -54,46 +117,54 @@ jobs:
           echo "✅ COMPUTE_ENGINE_USER set to ${COMPUTE_ENGINE_USER}"
 
 
-      # ✅ Deploy to Compute Engine (Since airflow-server already exists)
-      - name: Deploy to Compute Engine
-        if: ${{ github.event_name == 'push' || inputs.deployment_target == 'compute_engine' || inputs.deployment_target == 'both' }}
+      # ---------- SSH KEYS -----------
+      - name: Configure SSH to VM
         run: |
-          echo "🚀 Connecting to airflow-server instance..."
-          # ✅ Ensure SSH Key Exists
+          echo "🚀 Ensuring SSH key for GitHub Actions..."
           if [ ! -f ~/.ssh/github-actions-key ]; then
             ssh-keygen -t rsa -b 4096 -C "github-actions" -N "" -f ~/.ssh/github-actions-key
             echo "✅ SSH Key generated!"
           else
             echo "✅ SSH Key already exists!"
           fi
-          # ✅ Ensure SSH Key is Added to Compute Engine
+
           PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
-          EXISTING_KEYS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(metadata.ssh-keys)" || echo "")
+          VM_NAME="airflow-server"
+          VM_ZONE="us-central1-a"
+
+          # Attach public key to VM metadata if missing
+          EXISTING_KEYS=$(gcloud compute instances describe $VM_NAME --zone $VM_ZONE --format="value(metadata.ssh-keys)" || echo "")
           if [[ "$EXISTING_KEYS" != *"$PUBLIC_KEY"* ]]; then
-            gcloud compute instances add-metadata airflow-server --zone us-central1-a --metadata=ssh-keys="${{ secrets.COMPUTE_ENGINE_USER }}:$PUBLIC_KEY"
-            echo "✅ SSH Key added to Compute Engine!"
+            echo "🔑 Adding SSH key to VM metadata..."
+            gcloud compute instances add-metadata $VM_NAME --zone $VM_ZONE \
+              --metadata=ssh-keys="${{ secrets.COMPUTE_ENGINE_USER }}:$PUBLIC_KEY"
+            echo "✅ SSH key added to VM!"
           else
-            echo "✅ SSH Key already exists in Compute Engine!"
+            echo "✅ SSH key is already in VM metadata!"
           fi
-          # ✅ Ensure Compute Engine is Running
-          INSTANCE_STATUS=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="value(status)" || echo "STOPPED")
-          if [[ "$INSTANCE_STATUS" != "RUNNING" ]]; then
-            echo "🚀 Starting Compute Engine instance..."
-            gcloud compute instances start airflow-server --zone us-central1-a
-            echo "✅ Compute Engine started."
-          else
-            echo "✅ Compute Engine is already running."
-          fi
-      - name: Sync Airflow Project Files to Compute Engine
+
+
+    # ---------- SYNC FILES -----------
+      - name: Sync Airflow Project Files to VM
         run: |
-          echo "🚀 Syncing project files to airflow-server..."
+          VM_NAME="airflow-server-vm"
+          VM_ZONE="us-central1-a"
+          echo "🚀 Syncing project files to $VM_NAME..."
+
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
-          sudo mkdir -p /opt/airflow
-          sudo chown -R $USER:$USER /opt/airflow
-          sudo chmod -R 775 /opt/airflow
+            sudo mkdir -p /opt/airflow
+            sudo chown -R $USER:$USER /opt/airflow
+            sudo chmod -R 775 /opt/airflow
           EOF
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
+
+          rsync -avz \
+            -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" \
+            --exclude '.git' \
+            . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
+
           echo "✅ Files synced successfully."
+      
+
       - name: Deploy Airflow on Compute Engine
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
@@ -121,14 +192,14 @@ jobs:
               echo "✅ Docker Compose is already installed."
             fi
 
-            # ✅ Ensure the user has permission to run Docker
+            # Give user Docker permissions
             echo "🔄 Adding user to Docker group..."
             sudo usermod -aG docker $USER
             newgrp docker
             sudo systemctl restart docker
             echo "✅ User added to Docker group and Docker restarted."
 
-            # ✅ Set correct permissions for Docker socket
+            # Fix Docker socket perms
             sudo chmod 666 /var/run/docker.sock
             echo "✅ Docker socket permissions fixed."
 
@@ -144,13 +215,16 @@ jobs:
             chmod 644 /opt/airflow/gcp-key.json
             sudo chown ubuntu:docker /opt/airflow/gcp-key.json
             echo "✅ GCP Key File Created."
+
             echo "🚀 Fixing Airflow log directory permissions..."
             sudo mkdir -p /opt/airflow/logs
             sudo chmod -R 777 /opt/airflow/logs
             sudo chown -R $USER:$USER /opt/airflow/logs
+            
             # ✅ Ensure the user can access Docker without root privileges
             echo "✅ Log directory permissions fixed."
             echo "✅ Airflow successfully started!"
+
           EOF
       - name: Get Airflow Webserver IP
         run: |
