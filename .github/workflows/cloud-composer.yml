@@ -94,21 +94,42 @@ jobs:
         run: |
           gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-      - name: Build & Push data-pipeline Image
-        if: steps.detect-changes.outputs.build_required == 'true'
+      # - name: Build & Push data-pipeline Image
+      #   if: steps.detect-changes.outputs.build_required == 'true'
+      #   run: |
+      #     echo "🚀 Docker build triggered (image missing or code changed)."
+      #     PROJECT_ID="primordial-veld-450618-n4"
+      #     REPO_NAME="airflow-docker-image"
+      #     IMAGE_NAME="data-pipeline"
+      #     IMAGE_TAG="latest"
+
+      #     # Build
+      #     docker build -t us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$IMAGE_TAG Data_Pipeline
+
+      #     # Push
+      #     docker push us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$IMAGE_TAG
+
+      - name: Test Docker Push
         run: |
-          echo "🚀 Docker build triggered (image missing or code changed)."
+          # Set variables
           PROJECT_ID="primordial-veld-450618-n4"
           REPO_NAME="airflow-docker-image"
-          IMAGE_NAME="data-pipeline"
+          IMAGE_NAME="test-push-image"
           IMAGE_TAG="latest"
-
-          # Build
-          docker build -t us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$IMAGE_TAG Data_Pipeline
-
-          # Push
-          docker push us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$IMAGE_TAG
-
+          REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
+          
+          echo "Testing docker push to ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG}"
+          
+          # Create a minimal Dockerfile for testing
+          echo -e "FROM alpine\nCMD [\"echo\", \"Test push successful!\"]" > Dockerfile.test
+          
+          # Build the test image
+          docker build -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Dockerfile.test .
+          
+          # Push the test image to Artifact Registry
+          docker push ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG}
+          
+          echo "Test Docker push completed successfully."
 
 
       - name: Ensure Airflow Server VM & Firewall
