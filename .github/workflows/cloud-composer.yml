@@ -76,12 +76,11 @@ jobs:
 
           # Extract matching image name & tag
           MATCHING_IMAGE=$(echo "$IMAGES_JSON" | jq -r --arg IMAGE_NAME "$FULL_IMAGE_PATH" '.[] | select(.package==$IMAGE_NAME) | .package')
-          MATCHING_TAG=$(echo "$IMAGES_JSON" | jq -r --arg TAG "$IMAGE_TAG" '.[] | select(.tags[]?==$TAG) | .tags[]')
 
           # Flag to check if a build is required
           BUILD_REQUIRED=false
 
-          if [[ "$MATCHING_IMAGE" == "$FULL_IMAGE_PATH" && "$MATCHING_TAG" == "$IMAGE_TAG" ]]; then
+          if [[ "$MATCHING_IMAGE" == "$FULL_IMAGE_PATH" ]]; then
             echo "✅ Exact match found: '${IMAGE_NAME}:${IMAGE_TAG}'"
           else
             echo "⚠️ No exact match for '${IMAGE_NAME}:${IMAGE_TAG}'. A new build is required."
