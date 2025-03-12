@@ -133,9 +133,12 @@ jobs:
           IMAGE_NAME="test-push-image"
           IMAGE_TAG=$(date +'%Y%m%d-%H%M%S')  # Unique tag for each build
           REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
+
+          # Create a minimal Dockerfile for testing
+          echo -e "FROM alpine\nCMD [\"echo\", \"Test push successful!\"]" > Dockerfile.test
           
           # Build with --no-cache to ensure a fresh build
-          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Dockerfile.test
+          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Dockerfile.test .
 
           # Also tag this as 'latest' for convenience
           docker tag ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} ${REPO_URI}/${IMAGE_NAME}:latest
