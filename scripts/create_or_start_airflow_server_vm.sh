@@ -11,7 +11,7 @@ MACHINE_TYPE="c4a-standard-1"
 
 # Disk & OS
 DISK_SIZE_GB="50"
-IMAGE_FAMILY="ubuntu-2204-arm64"
+IMAGE_FAMILY="ubuntu-2204-lts-arm64"
 IMAGE_PROJECT="ubuntu-os-cloud"
 
 # Firewall rule name & port
