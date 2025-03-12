@@ -30,3 +30,5 @@ dvc-gs==3.0.1  # Google Cloud Storage plugin for DVC
 
 # Basic libraries expected by Docker
 pyyaml>=6.0.0
+
+pandas
