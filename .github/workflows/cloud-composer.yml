@@ -131,21 +131,20 @@ jobs:
           PROJECT_ID="primordial-veld-450618-n4"
           REPO_NAME="airflow-docker-image"
           IMAGE_NAME="test-push-image"
-          IMAGE_TAG="latest"
+          IMAGE_TAG=$(date +'%Y%m%d-%H%M%S')  # Unique tag for each build
           REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
           
-          echo "Testing docker push to ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG}"
-          
-          # Create a minimal Dockerfile for testing
-          echo -e "FROM alpine\nCMD [\"echo\", \"Test push successful!\"]" > Dockerfile.test
-          
-          # Build the test image
-          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Dockerfile.test .
-          
-          # Push the test image to Artifact Registry
+          # Build with --no-cache to ensure a fresh build
+          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} Data_Pipeline
+
+          # Also tag this as 'latest' for convenience
+          docker tag ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} ${REPO_URI}/${IMAGE_NAME}:latest
+
+          # Push both the timestamped tag and the latest tag
           docker push ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG}
-          
-          echo "Test Docker push completed successfully."
+          docker push ${REPO_URI}/${IMAGE_NAME}:latest
+
+          echo "Image pushed successfully with tag: ${IMAGE_TAG}"
 
 
       - name: Ensure Airflow Server VM & Firewall
