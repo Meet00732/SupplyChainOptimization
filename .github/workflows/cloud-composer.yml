@@ -66,29 +66,26 @@ jobs:
           REPO_NAME="airflow-docker-image"
           IMAGE_NAME="test-push-image"
           IMAGE_TAG="latest"
-          REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
+          LOCATION="us-central1"
+          FULL_IMAGE_PATH="${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}"
 
-          echo "🔍 Checking if remote image exists in Artifact Registry..."
+          echo "🔍 Checking if '${IMAGE_NAME}:${IMAGE_TAG}' exists in Artifact Registry..."
 
-          EXISTING_IMAGE=$(gcloud artifacts docker images list ${REPO_URI} \
-            --format="value(DISPLAY_NAME)" \
-            --filter="DISPLAY_NAME:(${IMAGE_NAME}:${IMAGE_TAG})")
+          # Get JSON output of images in Artifact Registry
+          IMAGES_JSON=$(gcloud artifacts docker images list "${FULL_IMAGE_PATH}" --include-tags --format="json")
 
-          if [[ -z "$EXISTING_IMAGE" ]]; then
-            echo "⚠️ Remote image not found in Artifact Registry."
-            echo "build_required=true" >> $GITHUB_OUTPUT
+          # Extract all matching image names & tags
+          MATCHING_IMAGE=$(echo "$IMAGES_JSON" | jq -r --arg IMAGE_NAME "$FULL_IMAGE_PATH" '.[] | select(.package==$IMAGE_NAME) | .package')
+          MATCHING_TAG=$(echo "$IMAGES_JSON" | jq -r --arg TAG "$IMAGE_TAG" '.[] | select(.tags[]?==$TAG) | .tags[]')
+
+          if [[ "$MATCHING_IMAGE" == "$FULL_IMAGE_PATH" && "$MATCHING_TAG" == "$IMAGE_TAG" ]]; then
+            echo "✅ Exact match found: '${IMAGE_NAME}:${IMAGE_TAG}'"
+            echo "build_required=false" >> $GITHUB_OUTPUT
           else
-            echo "✅ Remote image found: $EXISTING_IMAGE"
-            echo "🔍 Checking if Dockerfile or requirements changed via git diff..."
-
-            if git diff --quiet HEAD~1 HEAD -- \
-              Data_Pipeline/Dockerfile \
-              Data_Pipeline/requirements.txt; then
-              echo "build_required=false" >> $GITHUB_OUTPUT
-            else
-              echo "build_required=true" >> $GITHUB_OUTPUT
-            fi
+            echo "⚠️ No exact match for '${IMAGE_NAME}:${IMAGE_TAG}'. A new build is required."
+            echo "build_required=true" >> $GITHUB_OUTPUT
           fi
+
 
       - name: Configure Docker for Artifact Registry
         run: |
