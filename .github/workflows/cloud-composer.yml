@@ -46,6 +46,11 @@ jobs:
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
+      
+      - name: Update gcloud components
+        run: |
+          gcloud components update --quiet
+
 
       - name: Ensure Artifact Registry
         run: |
