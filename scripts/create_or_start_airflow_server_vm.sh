@@ -2,7 +2,7 @@
 set -e 
 
 # ----------- CONFIGURATION -----------
-VM_NAME="airflow-server-vm"
+VM_NAME="airflow-server"
 VM_ZONE="us-central1-a"
 
 # Example ARM-based machine type in GCP (4 vCPU, 16GB)
@@ -11,11 +11,11 @@ MACHINE_TYPE="c4a-standard-1"
 
 # Disk & OS
 DISK_SIZE_GB="50"
-IMAGE_FAMILY="ubuntu-2204-lts"
+IMAGE_FAMILY="ubuntu-2204-arm64"
 IMAGE_PROJECT="ubuntu-os-cloud"
 
 # Firewall rule name & port
-FIREWALL_RULE_NAME="allow-airflow-vm"
+FIREWALL_RULE_NAME="allow-airflow-server"
 FIREWALL_PORT="8080"
 FIREWALL_SOURCE="0.0.0.0/0"
 

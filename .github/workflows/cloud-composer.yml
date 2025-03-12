@@ -158,7 +158,7 @@ jobs:
           fi
 
           PUBLIC_KEY=$(cat ~/.ssh/github-actions-key.pub)
-          VM_NAME="airflow-server-vm"
+          VM_NAME="airflow-server"
           VM_ZONE="us-central1-a"
 
           # Attach public key to VM metadata if missing
@@ -176,7 +176,7 @@ jobs:
     # ---------- SYNC FILES -----------
       - name: Sync Airflow Project Files to VM
         run: |
-          VM_NAME="airflow-server-vm"
+          VM_NAME="airflow-server"
           VM_ZONE="us-central1-a"
           echo "🚀 Syncing project files to $VM_NAME..."
 
