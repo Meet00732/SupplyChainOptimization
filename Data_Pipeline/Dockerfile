@@ -24,3 +24,5 @@ WORKDIR /app/scripts
 
 # Default command (can be overridden by docker-compose)
 CMD ["python", "main.py"]
+
+
