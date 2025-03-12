@@ -6,7 +6,6 @@ VM_NAME="airflow-server"
 VM_ZONE="us-central1-a"
 
 # Example ARM-based machine type in GCP (4 vCPU, 16GB)
-# Adjust as needed (e.g. t2a-standard-8 for 8 vCPU)
 MACHINE_TYPE="c4a-standard-1"
 
 # Disk & OS
@@ -19,10 +18,12 @@ FIREWALL_RULE_NAME="allow-airflow-server"
 FIREWALL_PORT="8080"
 FIREWALL_SOURCE="0.0.0.0/0"
 
-# Snapshot name (if you want to create one after)
-CREATE_SNAPSHOT="no"   # change to "no" if you don't want a snapshot
-SNAPSHOT_NAME="arm-vm-snapshot-$(date +%Y%m%d-%H%M%S)"
+# Target tag for the firewall rule and VM
+TARGET_TAG="airflow-server"
 
+# Snapshot name (if you want to create one after)
+CREATE_SNAPSHOT="no"   # change to "yes" if you want a snapshot
+SNAPSHOT_NAME="arm-vm-snapshot-$(date +%Y%m%d-%H%M%S)"
 
 # ----------- 1) FIREWALL RULE -----------
 echo "🔒 Checking if firewall rule '$FIREWALL_RULE_NAME' exists..."
@@ -37,13 +38,13 @@ if [[ -z "$EXISTING_RULE" ]]; then
     --direction=INGRESS \
     --rules=tcp:$FIREWALL_PORT \
     --source-ranges="$FIREWALL_SOURCE" \
+    --target-tags="$TARGET_TAG" \
     --description="Allow Airflow UI on port $FIREWALL_PORT from $FIREWALL_SOURCE" \
     --priority=1000
   echo "✅ Firewall rule '$FIREWALL_RULE_NAME' created."
 else
   echo "✅ Firewall rule '$FIREWALL_RULE_NAME' already exists."
 fi
-
 
 # ----------- 2) CREATE OR START VM -----------
 echo "🔍 Checking if VM '$VM_NAME' exists..."
@@ -53,22 +54,20 @@ EXISTS=$(gcloud compute instances list \
 
 if [[ -z "$EXISTS" ]]; then
   echo "❌ No VM named '$VM_NAME' found. Creating a new one..."
-
   gcloud compute instances create "$VM_NAME" \
     --zone "$VM_ZONE" \
     --machine-type "$MACHINE_TYPE" \
     --image-family "$IMAGE_FAMILY" \
     --image-project "$IMAGE_PROJECT" \
     --boot-disk-size "$DISK_SIZE_GB" \
-    --scopes "cloud-platform"
-
+    --scopes "cloud-platform" \
+    --tags="$TARGET_TAG"
   echo "✅ VM '$VM_NAME' created successfully."
 else
   echo "✅ VM '$VM_NAME' already exists. Checking status..."
   VM_STATUS=$(gcloud compute instances describe "$VM_NAME" \
     --zone "$VM_ZONE" \
     --format="value(status)")
-
   if [[ "$VM_STATUS" != "RUNNING" ]]; then
     echo "🔄 VM '$VM_NAME' is not running. Starting it..."
     gcloud compute instances start "$VM_NAME" --zone "$VM_ZONE"
@@ -78,14 +77,12 @@ else
   fi
 fi
 
-
 # ----------- 3) (OPTIONAL) SNAPSHOT -----------
 if [[ "$CREATE_SNAPSHOT" == "yes" ]]; then
   echo "🗃  Creating snapshot '$SNAPSHOT_NAME' for VM '$VM_NAME'..."
   gcloud compute disks snapshot "$VM_NAME" \
     --zone "$VM_ZONE" \
     --snapshot-names "$SNAPSHOT_NAME"
-
   echo "✅ Snapshot '$SNAPSHOT_NAME' created."
 fi
 

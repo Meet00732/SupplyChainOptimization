@@ -110,6 +110,7 @@ jobs:
       #     docker push us-central1-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$IMAGE_TAG
 
       - name: Test Docker Push
+        if: steps.detect-changes.outputs.build_required == 'true'
         run: |
           # Set variables
           PROJECT_ID="primordial-veld-450618-n4"
@@ -173,30 +174,44 @@ jobs:
           fi
 
 
-    # ---------- SYNC FILES -----------
       - name: Sync Airflow Project Files to VM
         run: |
           VM_NAME="airflow-server"
           VM_ZONE="us-central1-a"
           echo "🚀 Syncing project files to $VM_NAME..."
 
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+          # Dynamically fetch the external IP of the VM
+          EXTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" --zone "$VM_ZONE" --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
+          echo "Fetched external IP: $EXTERNAL_IP"
+
+          # Use the fetched external IP for SSH
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@$EXTERNAL_IP << 'EOF'
             sudo mkdir -p /opt/airflow
             sudo chown -R $USER:$USER /opt/airflow
             sudo chmod -R 775 /opt/airflow
           EOF
 
+          # Use the fetched external IP for rsync
           rsync -avz \
             -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" \
             --exclude '.git' \
-            . ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }}:/opt/airflow
+            . ${{ secrets.COMPUTE_ENGINE_USER }}@$EXTERNAL_IP:/opt/airflow
 
           echo "✅ Files synced successfully."
       
 
       - name: Deploy Airflow on Compute Engine
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@${{ secrets.COMPUTE_ENGINE_IP }} << 'EOF'
+          VM_NAME="airflow-server"
+          VM_ZONE="us-central1-a"
+          echo "🚀 Syncing project files to $VM_NAME..."
+
+          # Dynamically fetch the external IP of the VM
+          EXTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" --zone "$VM_ZONE" --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
+          echo "Fetched external IP: $EXTERNAL_IP"
+
+
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@EXTERNAL_IP << 'EOF'
             echo "🚀 Ensuring Docker is installed..."
             if ! command -v docker &> /dev/null; then
               echo "❌ Docker is not installed. Installing..."
@@ -257,7 +272,12 @@ jobs:
           EOF
       - name: Get Airflow Webserver IP
         run: |
-          EXTERNAL_IP=$(gcloud compute instances describe airflow-server --zone us-central1-a --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
+          VM_NAME="airflow-server"
+          VM_ZONE="us-central1-a"
+          echo "🚀 Syncing project files to $VM_NAME..."
+
+          # Dynamically fetch the external IP of the VM
+          EXTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" --zone "$VM_ZONE" --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
           echo "🌍 Airflow UI is available at: http://$EXTERNAL_IP:8080"
       
       # ✅ Remove SSH Key after deployment (Security)
