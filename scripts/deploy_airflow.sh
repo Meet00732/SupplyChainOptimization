@@ -90,6 +90,8 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   echo "🚀 Stopping any running containers..."
   sudo docker compose down || true
 
+  sudo docker volume rm airflow_postgres-db-volume
+
   echo "🚀 Starting Airflow using Docker Compose..."
   sudo docker compose up -d --remove-orphans
 

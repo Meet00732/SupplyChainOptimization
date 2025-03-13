@@ -43,7 +43,7 @@ services:
     #   context: ./Data_Pipeline
     #   dockerfile: Dockerfile
     image: us-central1-docker.pkg.dev/primordial-veld-450618-n4/airflow-docker-image/data-pipeline:latest
-    platform: linux/amd64
+    platform: linux/arm64
     container_name: data-pipeline-container
     volumes:
       - ./Data_Pipeline/scripts:/app/scripts
@@ -58,7 +58,7 @@ services:
 
   postgres:
     image: postgres:15
-    platform: linux/amd64
+    platform: linux/arm64
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -66,16 +66,14 @@ services:
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 15
-      start_period: 60s
-    restart: on-failure
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    restart: always
 
   redis:
     image: redis:latest
-    platform: linux/amd64
+    platform: linux/arm64
     ports:
       - 6379:6379
     healthcheck:
