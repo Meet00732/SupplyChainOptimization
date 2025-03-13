@@ -59,7 +59,7 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   echo "🔄 Adding user to Docker group..."
   sudo groupadd docker || true
   sudo usermod -aG docker \$USER
-  newgrp docker  # Apply changes immediately
+  # newgrp docker might not work as expected in non-interactive sessions
   sudo systemctl restart docker
 
   echo "✅ Docker setup completed."
@@ -90,7 +90,8 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   echo "🚀 Stopping any running containers..."
   docker compose down || true
 
-  docker volume rm airflow_postgres-db-volume
+  # Remove postgres volume if you want to reset the DB (warning: this clears data)
+  docker volume rm airflow_postgres-db-volume || true
 
   echo "🚀 Starting Airflow using Docker Compose..."
   docker compose up -d --remove-orphans
