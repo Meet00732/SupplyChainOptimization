@@ -12,7 +12,7 @@ echo "🚀 Deploying Airflow on $VM_NAME..."
 EXTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" --zone "$VM_ZONE" --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
 echo "Fetched external IP: $EXTERNAL_IP"
 
-ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EXTERNAL_IP" <<EOF
+ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER@$EXTERNAL_IP" <<EOF
   echo "🚀 Ensuring Docker is installed..."
 
   if ! command -v docker &> /dev/null; then
@@ -59,7 +59,6 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   echo "🔄 Adding user to Docker group..."
   sudo groupadd docker || true
   sudo usermod -aG docker \$USER
-  # newgrp docker might not work as expected in non-interactive sessions
   sudo systemctl restart docker
 
   echo "✅ Docker setup completed."
@@ -68,7 +67,6 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   sudo chown root:docker /var/run/docker.sock
   echo "✅ Docker socket permissions fixed."
 
-  # Ensure Docker service is running before continuing
   echo "🚀 Ensuring Docker service is running..."
   sudo systemctl is-active --quiet docker || sudo systemctl restart docker
 
@@ -81,11 +79,24 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   sudo chown -R \$USER:\$USER /opt/airflow/logs
   echo "✅ Log directory permissions fixed."
 
+  # Remove /opt/airflow/gcp-key.json if it exists as a directory
+  if [ -d /opt/airflow/gcp-key.json ]; then
+    echo "⚠️ Found directory at /opt/airflow/gcp-key.json. Removing it..."
+    sudo rm -rf /opt/airflow/gcp-key.json
+  fi
+
+  # Create the GCP Key file from the secret
+  echo "🚀 Creating GCP Key File..."
+  echo "$GCP_SERVICE_ACCOUNT_KEY" | jq . > /opt/airflow/gcp-key.json
+  chmod 644 /opt/airflow/gcp-key.json
+  sudo chown \$USER:docker /opt/airflow/gcp-key.json
+  echo "✅ GCP Key File Created."
+
   cd /opt/airflow
 
   echo "🚀 Pulling the latest image from Artifact Registry..."
   gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-  docker compose pull || true  # Ensure we pull the latest image
+  docker compose pull || true
 
   echo "🚀 Stopping any running containers..."
   docker compose down || true
