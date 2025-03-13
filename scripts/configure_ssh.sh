@@ -2,9 +2,9 @@
 set -e
 
 # Usage: ./scripts/configure_ssh.sh <VM_NAME> <VM_ZONE> <REMOTE_USER>
-VM_NAME="airflow-server"
-VM_ZONE="us-central1-a"
-REMOTE_USER="ubuntu"
+VM_NAME="${VM_NAME:-airflow-server}"
+VM_ZONE="${VM_ZONE:-us-central1-a}"
+REMOTE_USER="${REMOTE_USER:-ubuntu}"
 
 echo "🚀 Ensuring SSH key for GitHub Actions..."
 if [ ! -f ~/.ssh/github-actions-key ]; then

@@ -63,6 +63,9 @@ if [[ -z "$EXISTS" ]]; then
     --scopes "cloud-platform" \
     --tags="$TARGET_TAG"
   echo "✅ VM '$VM_NAME' created successfully."
+  echo "Waiting 60 seconds for the VM to fully spin up..."
+  sleep 60
+
 else
   echo "✅ VM '$VM_NAME' already exists. Checking status..."
   VM_STATUS=$(gcloud compute instances describe "$VM_NAME" \

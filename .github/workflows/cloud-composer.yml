@@ -17,6 +17,17 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT_ID: primordial-veld-450618-n4
+      GCP_LOCATION: us-central1
+      ARTIFACT_REGISTRY_NAME: airflow-docker-image
+      REPO_FORMAT: docker
+      DOCKER_IMAGE_NAME: data-pipeline
+      DOCKER_IMAGE_TAG: latest
+      VM_NAME: airflow-server
+      VM_ZONE: us-central1-a
+      MACHINE_TYPE: e2-standard-4
+      REMOTE_USER: ubuntu
 
     steps:
       - name: Checkout Repository
@@ -33,10 +44,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r Data_Pipeline/requirementstest.txt
+
       - name: Set PYTHONPATH
         run: |
           echo "PYTHONPATH=$(pwd)/Data_Pipeline:$(pwd)" >> $GITHUB_ENV
           echo "PYTHONPATH set to $(pwd)/Data_Pipeline:$(pwd)"
+
       - name: Run Unit Tests
         run: |
           python -m unittest discover -s Data_Pipeline/tests -p "test*.py"
@@ -61,52 +74,59 @@ jobs:
 
 
       # ---------- CONDITIONAL DOCKER BUILD ----------
+      # - name: Check if Docker Build is Needed
+      #   id: detect-changes
+      #   run: |
+      #     PROJECT_ID="primordial-veld-450618-n4"
+      #     REPO_NAME="airflow-docker-image"
+      #     IMAGE_NAME="data-pipeline"
+      #     IMAGE_TAG="latest"
+      #     LOCATION="us-central1"
+      #     FULL_IMAGE_PATH="${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}"
+
+      #     echo "🔍 Checking if '${IMAGE_NAME}:${IMAGE_TAG}' exists in Artifact Registry..."
+
+      #     # Get JSON output of images in Artifact Registry
+      #     IMAGES_JSON=$(gcloud artifacts docker images list "${FULL_IMAGE_PATH}" --include-tags --format="json")
+
+      #     # Extract matching image name & tag
+      #     MATCHING_IMAGE=$(echo "$IMAGES_JSON" | jq -r --arg IMAGE_NAME "$FULL_IMAGE_PATH" '.[] | select(.package==$IMAGE_NAME) | .package')
+
+      #     # Flag to check if a build is required
+      #     BUILD_REQUIRED=false
+
+      #     if [[ "$MATCHING_IMAGE" == "$FULL_IMAGE_PATH" ]]; then
+      #       echo "✅ Exact match found: '${IMAGE_NAME}:${IMAGE_TAG}'"
+      #     else
+      #       echo "⚠️ No exact match for '${IMAGE_NAME}:${IMAGE_TAG}'. A new build is required."
+      #       BUILD_REQUIRED=true
+      #     fi
+
+      #     echo "🔍 Checking if 'Dockerfile' or 'requirements.txt' has changed..."
+
+      #     if [ "$(git rev-list --count HEAD)" -lt 2 ]; then
+      #       echo "⚠️ Not enough commit history. Assuming changes."
+      #       BUILD_REQUIRED=true
+      #     else
+      #       if ! git diff --quiet HEAD~1 HEAD -- Data_Pipeline/Dockerfile Data_Pipeline/requirements.txt; then
+      #         echo "⚠️ Changes detected in 'Dockerfile' or 'requirements.txt'. A new build is required."
+      #         BUILD_REQUIRED=true
+      #       fi
+      #     fi
+
+      #     # Set output based on build requirement
+      #     if [[ "$BUILD_REQUIRED" == "true" ]]; then
+      #       echo "build_required=true" >> $GITHUB_OUTPUT
+      #     else
+      #       echo "build_required=false" >> $GITHUB_OUTPUT
+      #     fi
+
+
       - name: Check if Docker Build is Needed
         id: detect-changes
         run: |
-          PROJECT_ID="primordial-veld-450618-n4"
-          REPO_NAME="airflow-docker-image"
-          IMAGE_NAME="data-pipeline"
-          IMAGE_TAG="latest"
-          LOCATION="us-central1"
-          FULL_IMAGE_PATH="${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}"
-
-          echo "🔍 Checking if '${IMAGE_NAME}:${IMAGE_TAG}' exists in Artifact Registry..."
-
-          # Get JSON output of images in Artifact Registry
-          IMAGES_JSON=$(gcloud artifacts docker images list "${FULL_IMAGE_PATH}" --include-tags --format="json")
-
-          # Extract matching image name & tag
-          MATCHING_IMAGE=$(echo "$IMAGES_JSON" | jq -r --arg IMAGE_NAME "$FULL_IMAGE_PATH" '.[] | select(.package==$IMAGE_NAME) | .package')
-
-          # Flag to check if a build is required
-          BUILD_REQUIRED=false
-
-          if [[ "$MATCHING_IMAGE" == "$FULL_IMAGE_PATH" ]]; then
-            echo "✅ Exact match found: '${IMAGE_NAME}:${IMAGE_TAG}'"
-          else
-            echo "⚠️ No exact match for '${IMAGE_NAME}:${IMAGE_TAG}'. A new build is required."
-            BUILD_REQUIRED=true
-          fi
-
-          echo "🔍 Checking if 'Dockerfile' or 'requirements.txt' has changed..."
-
-          if [ "$(git rev-list --count HEAD)" -lt 2 ]; then
-            echo "⚠️ Not enough commit history. Assuming changes."
-            BUILD_REQUIRED=true
-          else
-            if ! git diff --quiet HEAD~1 HEAD -- Data_Pipeline/Dockerfile Data_Pipeline/requirements.txt; then
-              echo "⚠️ Changes detected in 'Dockerfile' or 'requirements.txt'. A new build is required."
-              BUILD_REQUIRED=true
-            fi
-          fi
-
-          # Set output based on build requirement
-          if [[ "$BUILD_REQUIRED" == "true" ]]; then
-            echo "build_required=true" >> $GITHUB_OUTPUT
-          else
-            echo "build_required=false" >> $GITHUB_OUTPUT
-          fi
+          chmod +x scripts/check_docker_build.sh
+          scripts/check_docker_build.sh
 
 
 
@@ -114,27 +134,37 @@ jobs:
         run: |
           gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
+
+      # - name: Build & Push data-pipeline Image
+      #   if: steps.detect-changes.outputs.build_required == 'true'
+      #   run: |
+      #     echo "🚀 Docker build triggered (image missing or code changed)."
+      #     PROJECT_ID="primordial-veld-450618-n4"
+      #     REPO_NAME="airflow-docker-image"
+      #     IMAGE_NAME="data-pipeline"
+      #     IMAGE_TAG=$(date +'%Y%m%d-%H%M%S')
+      #     REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
+          
+      #     # Build with --no-cache to ensure a fresh build
+      #     docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Data_Pipeline/Dockerfile Data_Pipeline
+
+      #     # Also tag this as 'latest' for convenience
+      #     docker tag ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} ${REPO_URI}/${IMAGE_NAME}:latest
+
+      #     # Push both the timestamped tag and the latest tag
+      #     docker push ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG}
+      #     docker push ${REPO_URI}/${IMAGE_NAME}:latest
+
+      #     echo "Image pushed successfully with tag: ${IMAGE_TAG}"
+
+
       - name: Build & Push data-pipeline Image
         if: steps.detect-changes.outputs.build_required == 'true'
         run: |
-          echo "🚀 Docker build triggered (image missing or code changed)."
-          PROJECT_ID="primordial-veld-450618-n4"
-          REPO_NAME="airflow-docker-image"
-          IMAGE_NAME="data-pipeline"
-          IMAGE_TAG=$(date +'%Y%m%d-%H%M%S')
-          REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
-          
-          # Build with --no-cache to ensure a fresh build
-          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Data_Pipeline/Dockerfile Data_Pipeline
+          chmod +x scripts/build_and_push.sh
+          scripts/build_and_push.sh
 
-          # Also tag this as 'latest' for convenience
-          docker tag ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} ${REPO_URI}/${IMAGE_NAME}:latest
 
-          # Push both the timestamped tag and the latest tag
-          docker push ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG}
-          docker push ${REPO_URI}/${IMAGE_NAME}:latest
-
-          echo "Image pushed successfully with tag: ${IMAGE_TAG}"
 
       # - name: Test Docker Push
       #   if: steps.detect-changes.outputs.build_required == 'true'
@@ -206,7 +236,7 @@ jobs:
       - name: Configure SSH to VM
         run: |
           chmod +x scripts/configure_ssh.sh
-          ./scripts/configure_ssh.sh "airflow-server" "us-central1-a" "${{ secrets.COMPUTE_ENGINE_USER }}"
+          ./scripts/configure_ssh.sh
 
 
       # - name: Sync Airflow Project Files to VM
@@ -234,94 +264,102 @@ jobs:
 
       #     echo "✅ Files synced successfully."
 
+
       - name: Sync Airflow Project Files to VM
         run: |
           chmod +x scripts/sync_files.sh
-          ./scripts/sync_files.sh "airflow-server" "us-central1-a" "${{ secrets.COMPUTE_ENGINE_USER }}"
+          ./scripts/sync_files.sh
+
+
+      # - name: Deploy Airflow on Compute Engine
+      #   run: |
+      #     VM_NAME="airflow-server"
+      #     VM_ZONE="us-central1-a"
+      #     echo "🚀 Deploying Airflow on $VM_NAME..."
+
+      #     # Dynamically fetch the external IP of the VM
+      #     EXTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" --zone "$VM_ZONE" --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
+      #     echo "Fetched external IP: $EXTERNAL_IP"
+
+      #     # Use the fetched external IP for SSH (Note: using unquoted EOF for variable expansion)
+      #     ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@$EXTERNAL_IP << EOF
+      #       echo "🚀 Ensuring Docker is installed..."
+      #       if ! command -v docker &> /dev/null; then
+      #         echo "❌ Docker is not installed. Installing..."
+      #         sudo apt-get update -y
+      #         echo "🚀 Adding Docker repository..."
+      #         sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+      #         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+      #         sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu \$(lsb_release -cs) stable"
+      #         sudo apt-get update -y
+      #         sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+      #       else
+      #         echo "✅ Docker is already installed."
+      #       fi
+
+      #       if ! command -v docker-compose &> /dev/null; then
+      #         echo "❌ Docker Compose not found. Installing latest version..."
+      #         DOCKER_COMPOSE_VERSION=\$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep -Po '"tag_name": "\K.*?(?=")')
+      #         sudo curl -L "https://github.com/docker/compose/releases/download/\${DOCKER_COMPOSE_VERSION}/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
+      #         sudo chmod +x /usr/local/bin/docker-compose
+      #         sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+      #       else
+      #         echo "✅ Docker Compose is already installed."
+      #       fi
+
+      #       # Give user Docker permissions
+      #       echo "🔄 Adding user to Docker group..."
+      #       sudo usermod -aG docker \$USER
+      #       newgrp docker
+      #       sudo systemctl restart docker
+      #       echo "✅ User added to Docker group and Docker restarted."
+
+      #       # Fix Docker socket perms
+      #       sudo chmod 666 /var/run/docker.sock
+      #       echo "✅ Docker socket permissions fixed."
+
+      #       mkdir -p /opt/airflow
+      #       echo "airflow dir created."
+      #       echo "🚀 Ensuring GCP Key File exists..."
+      #       if [ -d /opt/airflow/gcp-key.json ]; then
+      #           echo "⚠️ Found directory at /opt/airflow/gcp-key.json. Removing it..."
+      #           sudo rm -rf /opt/airflow/gcp-key.json
+      #       fi
+      #       echo "🚀 Creating GCP Key File..."
+      #       echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' | jq . > /opt/airflow/gcp-key.json
+      #       chmod 644 /opt/airflow/gcp-key.json
+      #       sudo chown ubuntu:docker /opt/airflow/gcp-key.json
+      #       echo "✅ GCP Key File Created."
+
+      #       echo "🚀 Fixing Airflow log directory permissions..."
+      #       sudo mkdir -p /opt/airflow/logs
+      #       sudo chmod -R 777 /opt/airflow/logs
+      #       sudo chown -R \$USER:\$USER /opt/airflow/logs
+            
+      #       cd /opt/airflow
+
+      #       echo "🚀 Pulling the latest image from Artifact Registry..."
+      #       gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+      #       docker compose pull || true
+
+      #       echo "🚀 Stopping any running containers..."
+      #       docker compose down || true
+
+      #       # Remove postgres volume if you want to reset the DB (warning: this clears data)
+      #       docker volume rm airflow_postgres-db-volume || true
+
+      #       echo "🚀 Starting Airflow using Docker Compose..."
+      #       docker compose up -d --remove-orphans
+
+      #       echo "✅ Airflow successfully started!"
+      #     EOF
 
 
       - name: Deploy Airflow on Compute Engine
         run: |
-          VM_NAME="airflow-server"
-          VM_ZONE="us-central1-a"
-          echo "🚀 Deploying Airflow on $VM_NAME..."
+          chmod +x scripts/deploy_airflow.sh
+          scripts/deploy_airflow.sh
 
-          # Dynamically fetch the external IP of the VM
-          EXTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" --zone "$VM_ZONE" --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
-          echo "Fetched external IP: $EXTERNAL_IP"
-
-          # Use the fetched external IP for SSH (Note: using unquoted EOF for variable expansion)
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@$EXTERNAL_IP << EOF
-            echo "🚀 Ensuring Docker is installed..."
-            if ! command -v docker &> /dev/null; then
-              echo "❌ Docker is not installed. Installing..."
-              sudo apt-get update -y
-              echo "🚀 Adding Docker repository..."
-              sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-              sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu \$(lsb_release -cs) stable"
-              sudo apt-get update -y
-              sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-            else
-              echo "✅ Docker is already installed."
-            fi
-
-            if ! command -v docker-compose &> /dev/null; then
-              echo "❌ Docker Compose not found. Installing latest version..."
-              DOCKER_COMPOSE_VERSION=\$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep -Po '"tag_name": "\K.*?(?=")')
-              sudo curl -L "https://github.com/docker/compose/releases/download/\${DOCKER_COMPOSE_VERSION}/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-              sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
-            else
-              echo "✅ Docker Compose is already installed."
-            fi
-
-            # Give user Docker permissions
-            echo "🔄 Adding user to Docker group..."
-            sudo usermod -aG docker \$USER
-            newgrp docker
-            sudo systemctl restart docker
-            echo "✅ User added to Docker group and Docker restarted."
-
-            # Fix Docker socket perms
-            sudo chmod 666 /var/run/docker.sock
-            echo "✅ Docker socket permissions fixed."
-
-            mkdir -p /opt/airflow
-            echo "airflow dir created."
-            echo "🚀 Ensuring GCP Key File exists..."
-            if [ -d /opt/airflow/gcp-key.json ]; then
-                echo "⚠️ Found directory at /opt/airflow/gcp-key.json. Removing it..."
-                sudo rm -rf /opt/airflow/gcp-key.json
-            fi
-            echo "🚀 Creating GCP Key File..."
-            echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' | jq . > /opt/airflow/gcp-key.json
-            chmod 644 /opt/airflow/gcp-key.json
-            sudo chown ubuntu:docker /opt/airflow/gcp-key.json
-            echo "✅ GCP Key File Created."
-
-            echo "🚀 Fixing Airflow log directory permissions..."
-            sudo mkdir -p /opt/airflow/logs
-            sudo chmod -R 777 /opt/airflow/logs
-            sudo chown -R \$USER:\$USER /opt/airflow/logs
-            
-            cd /opt/airflow
-
-            echo "🚀 Pulling the latest image from Artifact Registry..."
-            gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-            docker compose pull || true
-
-            echo "🚀 Stopping any running containers..."
-            docker compose down || true
-
-            # Remove postgres volume if you want to reset the DB (warning: this clears data)
-            docker volume rm airflow_postgres-db-volume || true
-
-            echo "🚀 Starting Airflow using Docker Compose..."
-            docker compose up -d --remove-orphans
-
-            echo "✅ Airflow successfully started!"
-          EOF
 
       # - name: Deploy Airflow on Compute Engine
       #   env:

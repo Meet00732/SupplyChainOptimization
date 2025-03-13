@@ -2,9 +2,9 @@
 set -e
 
 # Usage: ./scripts/sync_files.sh <VM_NAME> <VM_ZONE> <REMOTE_USER>
-VM_NAME="airflow-server"
-VM_ZONE="us-central1-a"
-REMOTE_USER="ubuntu"
+VM_NAME="${VM_NAME:-airflow-server}"
+VM_ZONE="${VM_ZONE:-us-central1-a}"
+REMOTE_USER="${REMOTE_USER:-ubuntu}"
 
 echo "🚀 Syncing project files to $VM_NAME..."
 
