@@ -17,7 +17,7 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   sudo mkdir -p /opt/airflow
   sudo chown -R \$USER:\$USER /opt/airflow
   sudo chmod -R 775 /opt/airflow
-EOF
+  EOF
 
 # Rsync files to the remote /opt/airflow directory
 rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key" --exclude '.git' . "$REMOTE_USER"@"$EXTERNAL_IP":/opt/airflow

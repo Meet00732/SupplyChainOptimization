@@ -66,4 +66,4 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   echo "✅ Log directory permissions fixed."
 
   echo "✅ Airflow successfully started!"
-EOF
+  EOF
