@@ -6,11 +6,11 @@ VM_NAME="airflow-server"
 VM_ZONE="us-central1-a"
 
 # Example ARM-based machine type in GCP (4 vCPU, 16GB)
-MACHINE_TYPE="c4a-standard-1"
+MACHINE_TYPE="e2-standard-4"
 
 # Disk & OS
 DISK_SIZE_GB="50"
-IMAGE_FAMILY="ubuntu-2204-lts-arm64"
+IMAGE_FAMILY="ubuntu-2204-lts"
 IMAGE_PROJECT="ubuntu-os-cloud"
 
 # Firewall rule name & port

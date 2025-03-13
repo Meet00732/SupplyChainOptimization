@@ -124,18 +124,17 @@ jobs:
           IMAGE_TAG=$(date +'%Y%m%d-%H%M%S')
           REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
           
-          # Create and use a Buildx builder that supports multi-platform builds
-          docker buildx create --use --name multiarch-builder || docker buildx use multiarch-builder
-          docker buildx inspect --bootstrap
+          # Build with --no-cache to ensure a fresh build
+          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Data_Pipeline/Dockerfile Data_Pipeline
 
-          # Build only for ARM64, tag with both timestamp and "latest", and push
-          docker buildx build --no-cache --platform linux/arm64 \
-            -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} \
-            -t ${REPO_URI}/${IMAGE_NAME}:latest \
-            -f Data_Pipeline/Dockerfile Data_Pipeline --push
+          # Also tag this as 'latest' for convenience
+          docker tag ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} ${REPO_URI}/${IMAGE_NAME}:latest
 
-          echo "Image pushed successfully with tag: ${IMAGE_TAG} and latest"
+          # Push both the timestamped tag and the latest tag
+          docker push ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG}
+          docker push ${REPO_URI}/${IMAGE_NAME}:latest
 
+          echo "Image pushed successfully with tag: ${IMAGE_TAG}"
 
       # - name: Test Docker Push
       #   if: steps.detect-changes.outputs.build_required == 'true'
