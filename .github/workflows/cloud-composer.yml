@@ -66,7 +66,7 @@ jobs:
         run: |
           PROJECT_ID="primordial-veld-450618-n4"
           REPO_NAME="airflow-docker-image"
-          IMAGE_NAME="data-pipeline"
+          IMAGE_NAME="test-push-image"
           IMAGE_TAG="latest"
           LOCATION="us-central1"
           FULL_IMAGE_PATH="${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}"
@@ -114,44 +114,18 @@ jobs:
         run: |
           gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-      - name: Build & Push data-pipeline Image
-        if: steps.detect-changes.outputs.build_required == 'true'
-        run: |
-          echo "🚀 Docker build triggered (image missing or code changed)."
-          PROJECT_ID="primordial-veld-450618-n4"
-          REPO_NAME="airflow-docker-image"
-          IMAGE_NAME="data-pipeline"
-          IMAGE_TAG=$(date +'%Y%m%d-%H%M%S')
-          REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
-          
-          # Build with --no-cache to ensure a fresh build
-          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Data_Pipeline/Dockerfile Data_Pipeline
-
-          # Also tag this as 'latest' for convenience
-          docker tag ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} ${REPO_URI}/${IMAGE_NAME}:latest
-
-          # Push both the timestamped tag and the latest tag
-          docker push ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG}
-          docker push ${REPO_URI}/${IMAGE_NAME}:latest
-
-          echo "Image pushed successfully with tag: ${IMAGE_TAG}"
-
-      # - name: Test Docker Push
+      # - name: Build & Push data-pipeline Image
       #   if: steps.detect-changes.outputs.build_required == 'true'
       #   run: |
-      #     # Set variables
+      #     echo "🚀 Docker build triggered (image missing or code changed)."
       #     PROJECT_ID="primordial-veld-450618-n4"
       #     REPO_NAME="airflow-docker-image"
-      #     IMAGE_NAME="test-push-image"
-      #     IMAGE_TAG=$(date +'%Y%m%d-%H%M%S')  # Unique tag for each build
+      #     IMAGE_NAME="data-pipeline"
+      #     IMAGE_TAG=$(date +'%Y%m%d-%H%M%S')
       #     REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
-
-
-      #     # Create a minimal Dockerfile for testing
-      #     echo -e "FROM alpine\nCMD [\"echo\", \"Test push successful!\"]" > Dockerfile.test
           
       #     # Build with --no-cache to ensure a fresh build
-      #     docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Dockerfile.test .
+      #     docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Data_Pipeline/Dockerfile Data_Pipeline
 
       #     # Also tag this as 'latest' for convenience
       #     docker tag ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} ${REPO_URI}/${IMAGE_NAME}:latest
@@ -161,6 +135,32 @@ jobs:
       #     docker push ${REPO_URI}/${IMAGE_NAME}:latest
 
       #     echo "Image pushed successfully with tag: ${IMAGE_TAG}"
+
+      - name: Test Docker Push
+        if: steps.detect-changes.outputs.build_required == 'true'
+        run: |
+          # Set variables
+          PROJECT_ID="primordial-veld-450618-n4"
+          REPO_NAME="airflow-docker-image"
+          IMAGE_NAME="test-push-image"
+          IMAGE_TAG=$(date +'%Y%m%d-%H%M%S')  # Unique tag for each build
+          REPO_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}"
+
+
+          # Create a minimal Dockerfile for testing
+          echo -e "FROM alpine\nCMD [\"echo\", \"Test push successful!\"]" > Dockerfile.test
+          
+          # Build with --no-cache to ensure a fresh build
+          docker build --no-cache -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} -f Dockerfile.test .
+
+          # Also tag this as 'latest' for convenience
+          docker tag ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} ${REPO_URI}/${IMAGE_NAME}:latest
+
+          # Push both the timestamped tag and the latest tag
+          docker push ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG}
+          docker push ${REPO_URI}/${IMAGE_NAME}:latest
+
+          echo "Image pushed successfully with tag: ${IMAGE_TAG}"
 
 
       - name: Ensure Airflow Server VM & Firewall
