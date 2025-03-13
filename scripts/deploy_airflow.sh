@@ -58,7 +58,7 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "${REMOTE_USER}@${E
       sudo rm -rf /opt/airflow/gcp-key.json
   fi
   echo "🚀 Creating GCP Key File..."
-  echo "$GCP_SERVICE_ACCOUNT_KEY" | jq . > /opt/airflow/gcp-key.json
+  printf "%s" "$GCP_SERVICE_ACCOUNT_KEY" | jq . > /opt/airflow/gcp-key.json
   chmod 644 /opt/airflow/gcp-key.json
   sudo chown ubuntu:docker /opt/airflow/gcp-key.json
   echo "✅ GCP Key File Created."
