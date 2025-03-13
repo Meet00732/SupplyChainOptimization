@@ -305,7 +305,21 @@ jobs:
             sudo chmod -R 777 /opt/airflow/logs
             sudo chown -R \$USER:\$USER /opt/airflow/logs
             
-            echo "✅ Log directory permissions fixed."
+            cd /opt/airflow
+
+            echo "🚀 Pulling the latest image from Artifact Registry..."
+            gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+            docker compose pull || true
+
+            echo "🚀 Stopping any running containers..."
+            docker compose down || true
+
+            # Remove postgres volume if you want to reset the DB (warning: this clears data)
+            docker volume rm airflow_postgres-db-volume || true
+
+            echo "🚀 Starting Airflow using Docker Compose..."
+            docker compose up -d --remove-orphans
+
             echo "✅ Airflow successfully started!"
           EOF
 
