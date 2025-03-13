@@ -77,10 +77,18 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   sudo chown -R \$USER:\$USER /opt/airflow/logs
   echo "✅ Log directory permissions fixed."
 
+  cd /opt/airflow
+
+  echo "🚀 Pulling the latest image from Artifact Registry..."
+  gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+  docker compose pull || true  # Ensure we pull the latest image
+
+  echo "🚀 Stopping any running containers..."
   docker compose down || true
 
+  echo "🚀 Starting Airflow using Docker Compose..."
   docker compose up -d --remove-orphans
 
   echo "✅ Airflow successfully started!"
-  EOF
+EOF
 
