@@ -4,7 +4,7 @@ set -e
 # Usage: ./scripts/deploy_airflow.sh <VM_NAME> <VM_ZONE> <REMOTE_USER>
 VM_NAME="${1:-airflow-server}"
 VM_ZONE="${2:-us-central1-a}"
-REMOTE_USER="${3:-ubuntu}"
+USER="${3:-ubuntu}"
 
 echo "🚀 Deploying Airflow on $VM_NAME..."
 
@@ -12,85 +12,59 @@ echo "🚀 Deploying Airflow on $VM_NAME..."
 EXTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" --zone "$VM_ZONE" --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
 echo "Fetched external IP: $EXTERNAL_IP"
 
-ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER@$EXTERNAL_IP" <<EOF
-  echo "🚀 Ensuring Docker is installed..."
-
-  if ! command -v docker &> /dev/null; then
-    echo "❌ Docker is not installed. Installing..."
-    
-    sudo apt-get update -y
-    sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-
-    # Detect CPU architecture
-    ARCH=\$(dpkg --print-architecture)
-
-    # Add Docker's official GPG key
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-    # Use the correct repo based on architecture
-    if [ "\$ARCH" = "arm64" ]; then
-      echo "✅ Detected ARM64 architecture. Using ARM64 repository."
-      echo "deb [arch=arm64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \$(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key ${{ secrets.COMPUTE_ENGINE_USER }}@$EXTERNAL_IP << EOF
+    echo "🚀 Ensuring Docker is installed..."
+    if ! command -v docker &> /dev/null; then
+        echo "❌ Docker is not installed. Installing..."
+        sudo apt-get update -y
+        echo "🚀 Adding Docker repository..."
+        sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+        sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu \$(lsb_release -cs) stable"
+        sudo apt-get update -y
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io
     else
-      echo "✅ Detected AMD64 architecture. Using AMD64 repository."
-      echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \$(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        echo "✅ Docker is already installed."
     fi
 
-    sudo apt-get update -y
+    if ! command -v docker-compose &> /dev/null; then
+        echo "❌ Docker Compose not found. Installing latest version..."
+        DOCKER_COMPOSE_VERSION=\$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep -Po '"tag_name": "\K.*?(?=")')
+        sudo curl -L "https://github.com/docker/compose/releases/download/\${DOCKER_COMPOSE_VERSION}/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+        sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+    else
+        echo "✅ Docker Compose is already installed."
+    fi
 
-    # Install Docker components
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+    # Give user Docker permissions
+    echo "🔄 Adding user to Docker group..."
+    sudo usermod -aG docker \$USER
+    newgrp docker
+    sudo systemctl restart docker
+    echo "✅ User added to Docker group and Docker restarted."
 
-    # Enable Docker service
-    sudo systemctl enable docker
-    sudo systemctl start docker
-    echo "✅ Docker installed and started successfully."
-  else
-    echo "✅ Docker is already installed."
-  fi
+    # Fix Docker socket perms
+    sudo chmod 666 /var/run/docker.sock
+    echo "✅ Docker socket permissions fixed."
 
-  if ! command -v docker-compose &> /dev/null; then
-    echo "❌ Docker Compose not found. Installing..."
-    sudo apt-get install -y docker-compose-plugin
-  else
-    echo "✅ Docker Compose is already installed."
-  fi
+    mkdir -p /opt/airflow
+    echo "airflow dir created."
+    echo "🚀 Ensuring GCP Key File exists..."
+    if [ -d /opt/airflow/gcp-key.json ]; then
+        echo "⚠️ Found directory at /opt/airflow/gcp-key.json. Removing it..."
+        sudo rm -rf /opt/airflow/gcp-key.json
+    fi
+    echo "🚀 Creating GCP Key File..."
+    echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' | jq . > /opt/airflow/gcp-key.json
+    chmod 644 /opt/airflow/gcp-key.json
+    sudo chown ubuntu:docker /opt/airflow/gcp-key.json
+    echo "✅ GCP Key File Created."
 
-  echo "🔄 Adding user to Docker group..."
-  sudo groupadd docker || true
-  sudo usermod -aG docker \$USER
-  sudo systemctl restart docker
-
-  echo "✅ Docker setup completed."
-
-  # Fix Docker socket permissions
-  sudo chown root:docker /var/run/docker.sock
-  echo "✅ Docker socket permissions fixed."
-
-  echo "🚀 Ensuring Docker service is running..."
-  sudo systemctl is-active --quiet docker || sudo systemctl restart docker
-
-  mkdir -p /opt/airflow
-  echo "airflow dir created."
-
-  echo "🚀 Fixing Airflow log directory permissions..."
-  sudo mkdir -p /opt/airflow/logs
-  sudo chmod -R 777 /opt/airflow/logs
-  sudo chown -R \$USER:\$USER /opt/airflow/logs
-  echo "✅ Log directory permissions fixed."
-
-  # Remove /opt/airflow/gcp-key.json if it exists as a directory
-  if [ -d /opt/airflow/gcp-key.json ]; then
-    echo "⚠️ Found directory at /opt/airflow/gcp-key.json. Removing it..."
-    sudo rm -rf /opt/airflow/gcp-key.json
-  fi
-
-  # Create the GCP Key file from the secret
-  echo "🚀 Creating GCP Key File..."
-  echo "$GCP_SERVICE_ACCOUNT_KEY" | jq . > /opt/airflow/gcp-key.json
-  chmod 644 /opt/airflow/gcp-key.json
-  sudo chown \$USER:docker /opt/airflow/gcp-key.json
-  echo "✅ GCP Key File Created."
+    echo "🚀 Fixing Airflow log directory permissions..."
+    sudo mkdir -p /opt/airflow/logs
+    sudo chmod -R 777 /opt/airflow/logs
+    sudo chown -R \$USER:\$USER /opt/airflow/logs
 
   cd /opt/airflow
 
