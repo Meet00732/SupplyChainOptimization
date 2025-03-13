@@ -2,9 +2,9 @@
 set -e
 
 # Usage: ./scripts/deploy_airflow.sh <VM_NAME> <VM_ZONE> <REMOTE_USER>
-VM_NAME="airflow-server"
-VM_ZONE="us-central1-a"
-REMOTE_USER="ubuntu"
+VM_NAME="${1:-airflow-server}"
+VM_ZONE="${2:-us-central1-a}"
+REMOTE_USER="${3:-ubuntu}"
 
 echo "🚀 Deploying Airflow on $VM_NAME..."
 
@@ -54,7 +54,8 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
       sudo rm -rf /opt/airflow/gcp-key.json
   fi
   echo "🚀 Creating GCP Key File..."
-  echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' | jq . > /opt/airflow/gcp-key.json
+  # Use the environment variable GCP_SERVICE_ACCOUNT_KEY passed in from GitHub Actions
+  echo "\$GCP_SERVICE_ACCOUNT_KEY" | jq . > /opt/airflow/gcp-key.json
   chmod 644 /opt/airflow/gcp-key.json
   sudo chown ubuntu:docker /opt/airflow/gcp-key.json
   echo "✅ GCP Key File Created."
@@ -66,4 +67,4 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   echo "✅ Log directory permissions fixed."
 
   echo "✅ Airflow successfully started!"
-  EOF
+EOF

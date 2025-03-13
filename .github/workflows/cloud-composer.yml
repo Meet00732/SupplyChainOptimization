@@ -303,6 +303,8 @@ jobs:
       #     EOF
 
       - name: Deploy Airflow on Compute Engine
+        env:
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }} 
         run: |
           chmod +x scripts/deploy_airflow.sh
           ./scripts/deploy_airflow.sh "airflow-server" "us-central1-a" "${{ secrets.COMPUTE_ENGINE_USER }}"
