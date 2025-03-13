@@ -50,10 +50,8 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   fi
 
   if ! command -v docker-compose &> /dev/null; then
-    echo "❌ Docker Compose not found. Installing latest version..."
-    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
-    sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+    echo "❌ Docker Compose not found. Installing..."
+    sudo apt-get install -y docker-compose-plugin
   else
     echo "✅ Docker Compose is already installed."
   fi
@@ -61,12 +59,18 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
   echo "🔄 Adding user to Docker group..."
   sudo groupadd docker || true
   sudo usermod -aG docker \$USER
+  newgrp docker  # Apply changes immediately
   sudo systemctl restart docker
 
   echo "✅ Docker setup completed."
 
-  sudo chmod 666 /var/run/docker.sock
+  # Fix Docker socket permissions
+  sudo chown root:docker /var/run/docker.sock
   echo "✅ Docker socket permissions fixed."
+
+  # Ensure Docker service is running before continuing
+  echo "🚀 Ensuring Docker service is running..."
+  sudo systemctl is-active --quiet docker || sudo systemctl restart docker
 
   mkdir -p /opt/airflow
   echo "airflow dir created."
@@ -81,14 +85,13 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "$REMOTE_USER"@"$EX
 
   echo "🚀 Pulling the latest image from Artifact Registry..."
   gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-  docker compose pull || true  # Ensure we pull the latest image
+  sudo docker compose pull || true  # Ensure we pull the latest image
 
   echo "🚀 Stopping any running containers..."
-  docker compose down || true
+  sudo docker compose down || true
 
   echo "🚀 Starting Airflow using Docker Compose..."
-  docker compose up -d --remove-orphans
+  sudo docker compose up -d --remove-orphans
 
   echo "✅ Airflow successfully started!"
 EOF
-
