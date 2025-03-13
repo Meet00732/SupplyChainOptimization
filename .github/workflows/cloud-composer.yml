@@ -128,13 +128,14 @@ jobs:
           docker buildx create --use --name multiarch-builder || docker buildx use multiarch-builder
           docker buildx inspect --bootstrap
 
-          # Build for ARM64 and AMD64, tag with timestamp and "latest", and push
-          docker buildx build --no-cache --platform linux/arm64,linux/amd64 \
+          # Build only for ARM64, tag with both timestamp and "latest", and push
+          docker buildx build --no-cache --platform linux/arm64 \
             -t ${REPO_URI}/${IMAGE_NAME}:${IMAGE_TAG} \
             -t ${REPO_URI}/${IMAGE_NAME}:latest \
             -f Data_Pipeline/Dockerfile Data_Pipeline --push
 
           echo "Image pushed successfully with tag: ${IMAGE_TAG} and latest"
+
 
       # - name: Test Docker Push
       #   if: steps.detect-changes.outputs.build_required == 'true'
