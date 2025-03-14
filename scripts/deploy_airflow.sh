@@ -7,6 +7,7 @@ VM_NAME="${1:-${VM_NAME:-airflow-server}}"
 VM_ZONE="${2:-${VM_ZONE:-us-central1-a}}"
 REMOTE_USER="${3:-${REMOTE_USER:-ubuntu}}"
 
+
 echo "🚀 Deploying Airflow on ${VM_NAME}..."
 
 # Dynamically fetch the external IP of the VM.
@@ -58,7 +59,6 @@ ssh -o StrictHostKeyChecking=no -i ~/.ssh/github-actions-key "${REMOTE_USER}@${E
       sudo rm -rf /opt/airflow/gcp-key.json
   fi
   echo "🚀 Creating GCP Key File..."
-  echo "$GCP_SERVICE_ACCOUNT_KEY"
   echo "$GCP_SERVICE_ACCOUNT_KEY" | jq . > /opt/airflow/gcp-key.json
   chmod 644 /opt/airflow/gcp-key.json
   sudo chown ubuntu:docker /opt/airflow/gcp-key.json
